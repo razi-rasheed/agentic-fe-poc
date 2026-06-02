@@ -128,7 +128,7 @@ Including the **previous→current** values is technically redundant (`previous 
 - `current_preference_profile` / `current_goal_manifest` views (latest version per athlete).
 - Supabase **Auth** configured invite-only; `athletes` row provisioning.
 - **Secrets placement**: Intervals credentials in Supabase Vault; Google creds in GH/Vercel secrets (no readable columns).
-- Migrations + a seed script for ~2–3 test athletes.
+- **Everything as code** (§11): all DDL/RLS/views/triggers live in `supabase/migrations/` SQL files; seed in `supabase/seed.sql`; TypeScript types generated from the schema. The Supabase dashboard is never used to mutate schema.
 
 **Out of scope (later sub-projects):** the Python data engine (SP1), any UI (SP2), the Drive bridge / prompt rendering (SP3), NotebookLM loop / plan ingestion (SP4), calendar sync (SP5). SP0 delivers the schema and security those build on, plus seed data so they can develop independently.
 
@@ -408,4 +408,41 @@ SP0 is "done" when, against a real Supabase project:
 6. **Global vs per-athlete prompt template:** a global template (`athlete_id NULL`) is readable by any athlete; an athlete's override is invisible to others.
 7. **Secrets:** confirm no Intervals/Google secret is stored in a queryable column; the Intervals key resolves from Vault for the service role only.
 
-Tests can be expressed as SQL assertions (optionally pgTAP) plus a small seed script; they become the regression baseline SP1–SP5 build on.
+Tests can be expressed as pgTAP via `supabase test db` (preferred — runs in CI) or SQL assertions, plus the seed script; they become the regression baseline SP1–SP5 build on.
+
+---
+
+## 11. Implementation Considerations — Migrations as Code
+
+**Hard requirement:** the schema is **never created or altered through the Supabase dashboard.** Every change — initial creation and all future changes — is a version-controlled file applied programmatically. The dashboard is for inspection only.
+
+### Tooling decision
+**Supabase CLI migrations (raw SQL) are the single source of truth** for schema, RLS, views, triggers, and extensions. Rationale: this design is Postgres-native and RLS-heavy; policies, `security_invoker` views, Vault, `interval`/`jsonb`/array types, CHECK constraints, and the auth-provisioning trigger are all things an ORM (Prisma/Drizzle) makes you express in raw SQL anyway — so SQL-first removes a layer rather than adding one. The Next.js app consumes the schema through **`supabase-js` + generated TypeScript types**, so the app stays type-safe without owning the schema.
+
+> *Alternative considered:* Drizzle ORM as the schema source-of-truth (TS → generated migrations) gives a typed query builder, but RLS/views/Vault still drop to custom SQL, splitting the source of truth. Recommended only if a typed query builder is later wanted; it can be layered on top of the SQL-defined schema without becoming the migration authority.
+
+### Repository layout
+```
+supabase/
+  config.toml                 # supabase init
+  migrations/                 # timestamped, append-only SQL — the source of truth
+    2026XXXX_sp0_tables.sql
+    2026XXXX_sp0_rls.sql
+    2026XXXX_sp0_views.sql
+    2026XXXX_sp0_auth_trigger.sql
+  seed.sql                    # 2–3 test athletes + global prompt template
+  tests/                      # pgTAP tests (the §10 checklist)
+src/lib/database.types.ts     # generated, committed
+```
+
+### Workflows (all CLI, no UI)
+- **Local dev:** `supabase start` (Dockerised Postgres + Studio) → `supabase migration new <name>` → write SQL → `supabase db reset` (replays all migrations + `seed.sql` from scratch — fast iteration and the §10 verification).
+- **Types:** `supabase gen types typescript --local > src/lib/database.types.ts`, committed.
+- **Tests:** `supabase test db` runs the pgTAP suite (RLS isolation, views, upsert idempotency, etc.).
+- **Deploy:** `supabase db push` applies *pending* migrations to the linked remote project, run from a **GitHub Action** on merge to `main` (authenticated via `SUPABASE_ACCESS_TOKEN` + DB password from repo secrets). This reuses the GitHub Actions infrastructure already in the stack. Never `db push` by hand from a laptop against production.
+
+### Rules
+- **Migrations are append-only and immutable once applied** — fix-forward with a new migration; never edit a migration that has run on a shared environment.
+- **No secret values in committed SQL.** Vault *structure/usage* lives in a migration; secret *values* are injected at deploy time by a CI step calling `vault.create_secret(<value>, <name>)` with `<value>` sourced from GitHub secrets — so committed files contain DDL only.
+- **Every future schema change = a new migration file** reviewed in a PR; the same `db reset` / `db push` / `gen types` cycle applies.
+
