@@ -21,6 +21,7 @@ Full vision + the 6 product decisions: SP0 spec §1.
 | **`HANDOFF.md`** (this) | Orientation, current status, read order, next action |
 | **`docs/superpowers/specs/2026-06-03-triathlon-os-decisions.md`** | Decision Log — every architecture decision (D1–D13) with rationale + alternatives rejected. The "why." |
 | **`docs/superpowers/specs/2026-06-03-triathlon-os-sp0-foundation-design.md`** | SP0 spec — full architecture context (stack, weekly loop, files-vs-prompt model) + the detailed, buildable Foundation/Data-Model design (schema, RLS, auth, migrations-as-code). |
+| **`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`** | SP0 **implementation plan** — 10 TDD tasks (migrations + pgTAP), ready for subagent-driven execution (D14). |
 
 ## Architecture at a glance
 
