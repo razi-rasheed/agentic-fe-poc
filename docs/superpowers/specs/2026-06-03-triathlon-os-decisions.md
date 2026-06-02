@@ -12,9 +12,9 @@
 - **Product:** Triathlon OS — AI-driven endurance-coaching + tracking platform. Vision/pain points: SP0 spec §1; original handoff captured there.
 - **Decomposed into SP0–SP5** (SP0 spec §8). Each sub-project gets its own spec → plan → implementation cycle.
 - **SP0 (Foundation & Data Model): DESIGNED & APPROVED**, committed. Full schema + RLS + auth + migrations-as-code in the SP0 spec.
-- **Decisions D1–D5, D7–D12: ACCEPTED. D6: REVISED & accepted** (nutrition = manual + MFP CSV import; see below). D13 (feasibility spike): **IN PROGRESS.**
-- **Spike progress:** item 1 (MFP→Intervals nutrition) **CONCLUDED** → resolved by D6 revision (manual + optional MFP Premium CSV import; Intervals not used for nutrition). Items 2 (Intervals activities/wellness API) and 3 (NotebookLM JSON output) — status TBD with user.
-- **NEXT ACTION:** confirm whether to run spike items 2 & 3 (NotebookLM JSON is the highest remaining 🔴 risk) or treat the spike as concluded, then finalize SP0 & proceed to writing-plans.
+- **Decisions D1–D5, D7–D12: ACCEPTED. D6: REVISED & accepted** (nutrition = manual + MFP CSV import). **D13 (spike): CONCLUDED.** **D14: subagent-driven implementation, Sonnet-heavy** (see below).
+- **Spike outcome:** item 1 (MFP nutrition) concluded → D6 revision. Items 2 (Intervals activities/wellness API) & 3 (NotebookLM JSON output) **deferred — risks knowingly accepted**, to be validated in SP1 / SP4 respectively.
+- **NEXT ACTION:** write the **SP0 implementation plan** (writing-plans skill), then execute via **subagent-driven development** per D14.
 - **Not yet started:** any code, Supabase project, the feasibility spike itself.
 - **Key docs:** this file + `2026-06-03-triathlon-os-sp0-foundation-design.md` (same folder).
 
@@ -96,7 +96,7 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Rationale:** RLS/views/Vault/triggers are Postgres-native — ORMs force raw SQL for them anyway, so SQL-first removes a layer. Programmatic, version-controlled, CI-applied.
 - **Rejected:** dashboard clicks (not reproducible); Drizzle/Prisma as migration authority (splits the source of truth for an RLS-heavy schema; Drizzle optional *later* for typed queries).
 
-### D13 — Integration Feasibility Spike before locking SP0 · *In progress*
+### D13 — Integration Feasibility Spike before locking SP0 · *Concluded 2026-06-03*
 - **Decision:** run a time-boxed, read-only spike on the **not-owned** integrations before finalising the SP0 schema and building.
 - **Rationale:** the schema is cheap and fully owned (migrations-as-code); the integrations are expensive-to-discover and out of our control. De-risk the assumptions before building on them; let findings refine SP0 columns.
 - **Scope / go-no-go questions:**
@@ -105,3 +105,9 @@ These are the user's *product-level* decisions that frame everything; the engine
   - 🔴 **Intervals.icu (still open):** confirm the API exposes CTL/ATL/TSB, HRV, sleep, readiness, and activities (pace/HR/power/etc.) with known field names/units.
   - 🟡 **Google**: service-account → user-Drive sharing (so NotebookLM under the user's identity can read) + Calendar OAuth scopes.
 - **Split:** assistant can research public docs (Intervals API, NotebookLM behaviour, Google sharing); user must verify account-specific facts (their Intervals key, their MFP→Intervals nutrition, the NotebookLM JSON test).
+- **Outcome (2026-06-03):** item 1 concluded (→ D6 revised). Items 2 & 3 **deferred by user decision — risks knowingly accepted**: Intervals API field availability validated during SP1, NotebookLM JSON-output reliability validated during SP4. Fallbacks already documented (D7 input-cap, D4 lenient parsing).
+
+### D14 — Subagent-driven implementation; model policy Sonnet-heavy, Opus-minimal · *Accepted*
+- **Decision:** implement each sub-project (starting SP0) via **subagent-driven development** (`superpowers:subagent-driven-development`) once its implementation plan is written. **Model policy: use Sonnet 4.6 for the bulk of the work; reserve Opus 4.8 for the minimum** (e.g. only where deeper reasoning is genuinely needed — tricky design/review steps).
+- **Rationale:** cost/efficiency — Sonnet 4.6 handles most implementation tasks well; Opus is reserved for high-leverage reasoning. Subagent-driven keeps tasks isolated and reviewable.
+- **Sequence:** writing-plans (SP0 plan) → subagent-driven execution → review checkpoints.

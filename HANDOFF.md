@@ -1,8 +1,8 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** Design complete for SP0; **next action = Integration Feasibility Spike (D13)**.
-**Nothing is built yet** — no code, no Supabase project, no spike run.
+**Phase:** SP0 designed & approved; feasibility spike **concluded** (D13). **Next action = write the SP0 implementation plan (writing-plans), then subagent-driven implementation (Sonnet-heavy, D14).**
+**Nothing is built yet** — no code, no Supabase project.
 
 > This is the orientation doc. It deliberately stays shallow and points to the detailed docs. If you're resuming cold, read in this order: **this file → Decision Log → SP0 spec.**
 
@@ -41,16 +41,15 @@ Full vision + the 6 product decisions: SP0 spec §1.
 
 Order: `SP0 → {SP1, SP2} → SP3 → SP4 → SP5`. SP5 → next-week SP3 closes the feedback loop.
 
-## ▶ Next action: Integration Feasibility Spike (D13)
+## ▶ Next action: write the SP0 implementation plan → subagent-driven build
 
-De-risk what we **don't own** before locking SP0 and building. Probe, in order:
-1. 🔴 **NotebookLM** reliably emits schema-valid JSON `{feedback, sessions}`? (manual test) — fallback: lenient parser / reformatter / revisit engine.
-2. 🔴 **Intervals.icu** exposes CTL/ATL/TSB, HRV, sleep, readiness, activities — and does **MyFitnessPal nutrition sync into Intervals wellness**? — fallback: manual nutrition entry.
-3. 🟡 **Google** service-account → user-Drive sharing (for NotebookLM) + Calendar OAuth scopes.
+Feasibility spike (D13) is **concluded**:
+- ✅ **Nutrition (item 1):** no reliable MFP→Intervals sync → D6 revised to manual entry + optional MFP Premium CSV import (Intervals not used for nutrition).
+- ⏸️ **Intervals API (item 2)** and **NotebookLM JSON (item 3):** deferred — risks **knowingly accepted**, validated in SP1 / SP4. Fallbacks documented (D4 lenient parsing, D7 bulk-in-files).
 
-Findings feed back into SP0 columns; the schema is cheap to change (migrations-as-code), the integrations aren't.
-- *Assistant can do now:* research public docs (Intervals API, NotebookLM behaviour, Google sharing).
-- *User must verify:* their Intervals key, their MFP→Intervals nutrition, the NotebookLM JSON test.
+Now:
+1. **Write the SP0 implementation plan** via the writing-plans skill (schema + RLS + auth + migrations-as-code, per the SP0 spec).
+2. **Execute via subagent-driven development (D14)** — **Sonnet 4.6 for the bulk of the work, Opus 4.8 reserved for the minimum.**
 
 ## Conventions
 

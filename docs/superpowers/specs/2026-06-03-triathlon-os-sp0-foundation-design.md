@@ -390,9 +390,9 @@ Order: `SP0 → {SP1, SP2} → SP3 → SP4 → SP5`. SP5 → (next week) SP3 clo
 
 ## 9. Risks & Open Questions
 
-1. **NotebookLM input cap (validated in SP4).** Bulk-in-files keeps the prompt tiny; if a payload ever overflows, the content already lives in a file. Empirically confirm the paste path holds.
+1. **NotebookLM output reliability + input cap — ACCEPTED OPEN; validate in SP4 (D13).** The paste-back loop assumes NotebookLM reliably emits schema-valid `{feedback, sessions}` JSON, and that the delta-only prompt stays under the input cap. Both are knowingly accepted as open per the D13 spike conclusion. Fallbacks: lenient parser / reformatter step for JSON (D4); bulk already lives in files for the cap (D7).
 2. **MFP nutrition — RESOLVED (D13 spike, 2026-06-03).** No reliable MFP→Intervals sync exists. D6 revised: nutrition is manual entry + optional MFP Premium CSV import in the Review UI (SP2), straight into Supabase. Intervals is not used for nutrition.
-3. **Intervals.icu API field mapping.** SP1 must map Intervals' fields (fitness/fatigue/form, wellness, nutrition) onto the §6.1 columns and confirm the auth method (API key).
+3. **Intervals.icu API field mapping — ACCEPTED OPEN; validate in SP1 (D13).** SP1 must confirm the API exposes and map fitness/fatigue/form + wellness (HRV/sleep/readiness) + activities onto the §6.1 columns, and confirm the auth method (API key). Knowingly deferred per the D13 spike conclusion. (Nutrition is no longer sourced from Intervals — D6.)
 4. **Service-account vs per-user OAuth for Google.** Drive files (SP3) likely use a service account writing into per-athlete folders shared with the athlete's Google identity; Calendar (SP5) uses per-user OAuth. Finalised in SP3/SP5.
 
 ---
