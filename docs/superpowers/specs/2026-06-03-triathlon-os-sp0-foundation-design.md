@@ -31,7 +31,8 @@ It exists to solve concrete friction in endurance training:
 | Data engine | **Python + GitHub Actions** (nightly 23:30) | Pull Intervals.icu, normalise, upsert to Supabase. 6h job budget avoids serverless timeouts |
 | Database | **Supabase (PostgreSQL + RLS + Auth + Vault)** | Multi-tenant store; RLS = strict isolation; Vault = secrets |
 | Frontend/API | **Next.js on Vercel** | Sunday Review UI + API routes (render prompt, ingest plan, sync files/calendar) |
-| Data provider | **Intervals.icu** (official API) | Single normalised source for training load, activities, wellness, **and nutrition** (via MyFitnessPal→Intervals sync) |
+| Data provider | **Intervals.icu** (official API) | Normalised source for training load, activities, and physiological wellness. **Nutrition is NOT from Intervals** — see below |
+| Nutrition | **Manual entry + optional MFP Premium CSV import** (D6) | Entered in the Sunday Review UI; optional bulk import of the official MyFitnessPal Premium CSV export. No scraper. |
 | AI bridge | **Google Drive** (4 current files + research PDFs) | NotebookLM's persistent sources |
 | Calendar | **Google Calendar** (per-user OAuth) | Approved plan → one event per session |
 
@@ -39,7 +40,7 @@ It exists to solve concrete friction in endurance training:
 
 1. **NotebookLM has no API and cannot write back.** The inference step is manual: the app prepares context (files + a paste-ready prompt); the athlete runs NotebookLM and pastes the JSON output back. "Automatic course-correction" means *the app surfaces the deltas and the athlete re-asks NotebookLM*, which re-reads the updated source files.
 2. **NotebookLM grounds on *sources*, not the question box.** The chat input is length-limited; bulk context must live in sources. → **bulk in files, change-signal in the prompt** (§4).
-3. **Single ingestion source.** Routing nutrition through Intervals.icu collapses the data engine to one API and eliminates the fragile MyFitnessPal scraper. (Verify the MFP→Intervals nutrition sync once during setup — §9.)
+3. **Ingestion split (D6, revised after the D13 spike).** Intervals.icu provides training load, activities, and physiological wellness via its official API. **Nutrition does NOT come from Intervals** — the spike found no reliable MFP→Intervals sync. Nutrition is entered manually in the Review UI, with an optional bulk import of the official **MyFitnessPal Premium CSV export**, landing straight in Supabase.
 4. **Secrets never sit in readable columns** — directly honours the "no plain-text credentials" pain point (§6.4).
 
 ---
@@ -171,7 +172,7 @@ create table daily_metrics (
   atl           numeric,             -- fatigue
   tsb           numeric,             -- form
   daily_load    numeric,             -- TSS-equivalent
-  -- Nutrition
+  -- Nutrition (source = Review UI manual entry / MFP Premium CSV import, NOT the nightly Intervals job — D6)
   calories      int,
   carbs_g       numeric,
   protein_g     numeric,
@@ -377,8 +378,8 @@ The nightly **data engine uses the service role**, which bypasses RLS; it must e
 | # | Sub-project | Depends on |
 |---|-------------|-----------|
 | **SP0** | **Foundation & Data Model** (this spec) | — |
-| SP1 | **Data Engine** — Python + GitHub Actions nightly pull from Intervals.icu (training + nutrition), normalise, upsert | SP0 |
-| SP2 | **Sunday Review UI** — auth'd 7-day dashboard across 4 pillars; tags + notes; edit Goal/Preference; Generate prompt | SP0 (SP1 for real data) |
+| SP1 | **Data Engine** — Python + GitHub Actions nightly pull from Intervals.icu (training load, activities, physiological wellness — **not nutrition**), normalise, upsert | SP0 |
+| SP2 | **Sunday Review UI** — auth'd 7-day dashboard across 4 pillars; tags + notes; **manual nutrition entry + optional MFP Premium CSV import**; edit Goal/Preference; Generate prompt | SP0 (SP1 for real data) |
 | SP3 | **Context Bridge** — maintain the 4 current files (overwrite-in-place); render the delta prompt; Google service-account/Drive auth | SP0, SP2 |
 | SP4 | **NotebookLM Loop + Plan Ingestion** — prompt template; paste JSON → validate → store plan + feedback; validate input-cap | SP3 |
 | SP5 | **Plan Review + Google Calendar Sync** — review/edit proposed plan → Finalize → per-session calendar events | SP4 |
@@ -390,7 +391,7 @@ Order: `SP0 → {SP1, SP2} → SP3 → SP4 → SP5`. SP5 → (next week) SP3 clo
 ## 9. Risks & Open Questions
 
 1. **NotebookLM input cap (validated in SP4).** Bulk-in-files keeps the prompt tiny; if a payload ever overflows, the content already lives in a file. Empirically confirm the paste path holds.
-2. **MFP → Intervals.icu nutrition sync.** Confirm during setup that MyFitnessPal nutrition reliably reaches Intervals.icu wellness fields; otherwise nutrition falls back to manual entry in the Review UI (SP2).
+2. **MFP nutrition — RESOLVED (D13 spike, 2026-06-03).** No reliable MFP→Intervals sync exists. D6 revised: nutrition is manual entry + optional MFP Premium CSV import in the Review UI (SP2), straight into Supabase. Intervals is not used for nutrition.
 3. **Intervals.icu API field mapping.** SP1 must map Intervals' fields (fitness/fatigue/form, wellness, nutrition) onto the §6.1 columns and confirm the auth method (API key).
 4. **Service-account vs per-user OAuth for Google.** Drive files (SP3) likely use a service account writing into per-athlete folders shared with the athlete's Google identity; Calendar (SP5) uses per-user OAuth. Finalised in SP3/SP5.
 

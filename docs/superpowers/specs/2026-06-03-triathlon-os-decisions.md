@@ -12,8 +12,9 @@
 - **Product:** Triathlon OS — AI-driven endurance-coaching + tracking platform. Vision/pain points: SP0 spec §1; original handoff captured there.
 - **Decomposed into SP0–SP5** (SP0 spec §8). Each sub-project gets its own spec → plan → implementation cycle.
 - **SP0 (Foundation & Data Model): DESIGNED & APPROVED**, committed. Full schema + RLS + auth + migrations-as-code in the SP0 spec.
-- **Decisions D1–D12 below: ACCEPTED.** D13 (feasibility spike): **PENDING — this is the next action.**
-- **NEXT ACTION:** run the **Integration Feasibility Spike** (D13) before locking SP0 schema & building. Top risks to probe, in order: (1) NotebookLM reliably emitting schema-valid JSON; (2) Intervals.icu data availability + whether MyFitnessPal nutrition syncs into Intervals wellness; (3) Google service-account→Drive sharing + Calendar OAuth. Findings feed back into SP0 columns.
+- **Decisions D1–D5, D7–D12: ACCEPTED. D6: REVISED & accepted** (nutrition = manual + MFP CSV import; see below). D13 (feasibility spike): **IN PROGRESS.**
+- **Spike progress:** item 1 (MFP→Intervals nutrition) **CONCLUDED** → resolved by D6 revision (manual + optional MFP Premium CSV import; Intervals not used for nutrition). Items 2 (Intervals activities/wellness API) and 3 (NotebookLM JSON output) — status TBD with user.
+- **NEXT ACTION:** confirm whether to run spike items 2 & 3 (NotebookLM JSON is the highest remaining 🔴 risk) or treat the spike as concluded, then finalize SP0 & proceed to writing-plans.
 - **Not yet started:** any code, Supabase project, the feasibility spike itself.
 - **Key docs:** this file + `2026-06-03-triathlon-os-sp0-foundation-design.md` (same folder).
 
@@ -60,10 +61,13 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Rationale:** these are the athlete's **own** training blocks; Google Calendar is the right tool for self-scheduling and reuses Google auth already in the stack (per-user OAuth).
 - **Rejected:** Cal.com (built for *others booking you*, Calendly-style — wrong fit, extra account/auth); deferring calendar sync (kept as SP5).
 
-### D6 — Nutrition via Intervals.icu single source (not a MyFitnessPal scraper) · *Accepted (sync is an assumption → D13)*
-- **Decision:** route nutrition through Intervals.icu wellness fields (via MFP→Intervals sync) so the data engine hits **one** API.
-- **Rationale:** collapses ingestion to a single provider; eliminates the fragile, ToS-violating MFP scraper — the most break-prone part of the stack.
-- **Rejected:** nightly MFP scraper (fragile, against ToS); manual nutrition entry (**kept as fallback** if the sync doesn't work).
+### D6 — Nutrition: manual entry + optional MFP Premium CSV import (Intervals is NOT the nutrition source) · *Revised & accepted 2026-06-03 (spike item 1 concluded)*
+- **Decision:** nutrition (calories/carbs/protein/fat) is **entered manually in the Sunday Review UI**, with an **optional bulk import of the MyFitnessPal Premium CSV export** (parse meal-level rows → daily totals). Intervals.icu is no longer used for nutrition.
+- **Why changed (D13 spike finding):** there is **no reliable MFP→Intervals sync** — only fragile cookie-scrapers (`python-myfitnesspal`) or partial paths (Garmin = activity days only; Google Fit = kcal blank; "MFP won't even talk to Zapier"). Routing through Intervals reintroduced the exact fragile scraper this decision set out to avoid.
+- **Why this path:** manual entry is 100% reliable and fits the weekly-review cadence (the athlete is in the app every Sunday anyway). **MFP Premium CSV export** is official + ToS-compliant (date-range zip of CSVs emailed within ~1h, link valid 7 days), giving a reliable bulk option with no scraping.
+- **Implication:** Intervals.icu now provides **training load + activities + physiological wellness only**; nutrition enters via UI/CSV straight into Supabase. `daily_metrics` nutrition columns are unchanged — only their *source* changes (UI/CSV, not the nightly Intervals job). Nutrition entry + CSV import live in **SP2** (Review UI).
+- **Supersedes:** the original "route nutrition via Intervals.icu single source."
+- **Rejected:** nightly MFP cookie-scraper (fragile, ToS); Garmin/Google Fit/Apple Health relays (incomplete).
 
 ### D7 — Context model: 4 current files (sources) + delta-only prompt · *Accepted (input-cap → SP4)*
 - **Decision:** per athlete, maintain exactly 4 **current** files in Drive — `current-goal`, `current-preference`, `current-plan`, `current-week-data` — plus research PDFs, all **overwritten in place**. The weekly prompt carries only the change-delta + instruction.
@@ -92,11 +96,12 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Rationale:** RLS/views/Vault/triggers are Postgres-native — ORMs force raw SQL for them anyway, so SQL-first removes a layer. Programmatic, version-controlled, CI-applied.
 - **Rejected:** dashboard clicks (not reproducible); Drizzle/Prisma as migration authority (splits the source of truth for an RLS-heavy schema; Drizzle optional *later* for typed queries).
 
-### D13 — Integration Feasibility Spike before locking SP0 · *Pending (next action)*
+### D13 — Integration Feasibility Spike before locking SP0 · *In progress*
 - **Decision:** run a time-boxed, read-only spike on the **not-owned** integrations before finalising the SP0 schema and building.
 - **Rationale:** the schema is cheap and fully owned (migrations-as-code); the integrations are expensive-to-discover and out of our control. De-risk the assumptions before building on them; let findings refine SP0 columns.
 - **Scope / go-no-go questions:**
   - 🔴 **NotebookLM** reliably emits schema-valid JSON for `{feedback, sessions}`? (manual test with sample sources) — *fallback:* fenced-code-block + lenient parser / reformatter step / revisit engine.
-  - 🔴 **Intervals.icu**: API exposes CTL/ATL/TSB, HRV, sleep, readiness, activities — and **does MyFitnessPal nutrition sync into Intervals wellness**? *fallback:* manual nutrition entry (D6).
+  - ✅ **CONCLUDED — MyFitnessPal nutrition:** no reliable MFP→Intervals sync exists → resolved by revising D6 (manual entry + optional MFP Premium CSV import; Intervals not used for nutrition).
+  - 🔴 **Intervals.icu (still open):** confirm the API exposes CTL/ATL/TSB, HRV, sleep, readiness, and activities (pace/HR/power/etc.) with known field names/units.
   - 🟡 **Google**: service-account → user-Drive sharing (so NotebookLM under the user's identity can read) + Calendar OAuth scopes.
 - **Split:** assistant can research public docs (Intervals API, NotebookLM behaviour, Google sharing); user must verify account-specific facts (their Intervals key, their MFP→Intervals nutrition, the NotebookLM JSON test).
