@@ -1,8 +1,15 @@
+import type { Metadata } from 'next'
 import { Geist, Geist_Mono, JetBrains_Mono, Oxanium } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: 'Triathlon OS',
+  description: 'Your personal triathlon training system',
+}
 
 const oxaniumHeading = Oxanium({subsets:['latin'],variable:'--font-heading'});
 
@@ -25,7 +32,10 @@ export default function RootLayout({
       className={cn("antialiased", fontSans.variable, "font-mono", jetbrainsMono.variable, oxaniumHeading.variable)}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   )
