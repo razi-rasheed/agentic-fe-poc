@@ -45,6 +45,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Authenticated users visiting /login → send to /review
+  // (onboarding gating happens in (app)/layout.tsx via DB check)
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/review'

@@ -21,6 +21,16 @@ export default async function AppLayout({
     redirect('/login')
   }
 
+  // Onboarding gate: if athlete has no profile AND no goal, send to /onboarding
+  const [{ data: pref }, { data: goal }] = await Promise.all([
+    supabase.from('current_preference_profile').select('id').maybeSingle(),
+    supabase.from('current_goal_manifest').select('id').maybeSingle(),
+  ])
+
+  if (!pref && !goal) {
+    redirect('/onboarding')
+  }
+
   // Fetch the athlete row — RLS ensures we only get our own row
   const { data: athlete } = await supabase
     .from('athletes')
