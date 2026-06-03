@@ -39,6 +39,11 @@ This project runs on **Supabase Cloud**. We do **not** run a local Docker stack.
 
 **Per-task TDD rhythm becomes:** write the test file → run it via `psql "$SUPABASE_DB_URL" -f supabase/tests/<file>.sql` (RED: "relation … does not exist") → `supabase migration new <name>` + write SQL → `supabase db push` → re-run the test file (GREEN) → commit.
 
+**Supabase MCP (D16) — use for verification/introspection, NOT for applying migrations:**
+- `get_advisors` (security) — security lint in Task 10. `list_tables` / `list_migrations` / `list_extensions` — introspection. `generate_typescript_types` — alternative to `gen types --linked`. `search_docs` — Supabase docs.
+- **Do NOT use MCP `apply_migration`** to apply/iterate schema — it writes a migration-history row per call and breaks `db diff`/`db pull` (Supabase skill). Apply only via `supabase db push` from the repo `.sql` files (source of truth, D12).
+- Migrations to the cloud dev project: `supabase db push --db-url "$SUPABASE_DB_URL"` (verify `--db-url` support with `supabase db push --help`; otherwise `supabase link` once, then `supabase db push`).
+
 > **Notes:**
 > - Each migration: `supabase migration new <name>` (auto-timestamps, preserving order), paste SQL, then `supabase db push`.
 > - pgTAP files wrap in `begin; select plan(N); … select * from finish(); rollback;` — `N` is the exact assertion count.
@@ -327,15 +332,17 @@ alter table public.athletes enable row level security;
 
 create policy athlete_self on public.athletes
   for all
-  using (id = auth.uid())
-  with check (id = auth.uid());
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
 
 -- Provision an athletes row whenever a new auth user is created (spec §7).
+-- search_path = '' + fully-qualified names: SECURITY DEFINER search-path safety (Supabase skill).
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   insert into public.athletes (id, display_name, email)
@@ -488,10 +495,12 @@ alter table public.daily_metrics enable row level security;
 alter table public.activities    enable row level security;
 
 create policy tenant_isolation on public.daily_metrics
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 
 create policy tenant_isolation on public.activities
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -598,9 +607,11 @@ alter table public.preference_profiles enable row level security;
 alter table public.goal_manifests       enable row level security;
 
 create policy tenant_isolation on public.preference_profiles
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 create policy tenant_isolation on public.goal_manifests
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 
 -- "Current" = latest version per athlete; security_invoker so the caller's RLS applies.
 create view public.current_preference_profile with (security_invoker = true) as
@@ -737,11 +748,14 @@ alter table public.plan_sessions   enable row level security;
 alter table public.weekly_feedback enable row level security;
 
 create policy tenant_isolation on public.plans
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 create policy tenant_isolation on public.plan_sessions
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 create policy tenant_isolation on public.weekly_feedback
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -835,14 +849,17 @@ create table public.weekly_reviews (
 alter table public.prompt_templates enable row level security;
 alter table public.weekly_reviews    enable row level security;
 
--- prompt_templates: global rows (athlete_id null) readable by all; writes only to own rows
+-- prompt_templates: global rows (athlete_id null) readable by all authenticated; writes only to own rows
 create policy pt_read on public.prompt_templates
-  for select using (athlete_id is null or athlete_id = auth.uid());
+  for select to authenticated
+  using (athlete_id is null or (select auth.uid()) = athlete_id);
 create policy pt_write on public.prompt_templates
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 
 create policy tenant_isolation on public.weekly_reviews
-  for all using (athlete_id = auth.uid()) with check (athlete_id = auth.uid());
+  for all to authenticated
+  using ((select auth.uid()) = athlete_id) with check ((select auth.uid()) = athlete_id);
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -1057,6 +1074,10 @@ Confirm each §10 item is covered by a green assertion:
 7. Secrets — `01` `hasnt_column('athletes','intervals_api_key')` (Vault-backed secret values are introduced in SP1).
 
 If any item lacks a green assertion, add it to the relevant test file and re-run before continuing.
+
+- [ ] **Step 3b: Run the Supabase security advisor (MCP)**
+
+Use the Supabase MCP tool **`get_advisors`** with `type: "security"` against the project. Expected: **no ERROR/WARN findings** for our tables — in particular no `rls_disabled_in_public`, no `security_definer_view`, and no `function_search_path_mutable` (the `handle_new_user` fix addresses the last). Fix any finding before committing. (Also useful: `list_tables` to confirm all 10 tables exist with RLS enabled.)
 
 - [ ] **Step 4: Commit**
 

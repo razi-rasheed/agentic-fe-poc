@@ -12,9 +12,10 @@
 - **Product:** Triathlon OS — AI-driven endurance-coaching + tracking platform. Vision/pain points: SP0 spec §1; original handoff captured there.
 - **Decomposed into SP0–SP5** (SP0 spec §8). Each sub-project gets its own spec → plan → implementation cycle.
 - **SP0 (Foundation & Data Model): DESIGNED & APPROVED**, committed. Full schema + RLS + auth + migrations-as-code in the SP0 spec.
-- **Decisions D1–D5, D7–D14: ACCEPTED** (D6 revised: nutrition = manual + MFP CSV import; D13 spike concluded; D14 subagent-driven Sonnet-heavy). **D15: Supabase Cloud, no local Docker** (see below). **SP0 implementation plan written** (`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`).
+- **Decisions D1–D5, D7–D14: ACCEPTED** (D6 revised: nutrition = manual + MFP CSV import; D13 spike concluded; D14 subagent-driven Sonnet-heavy). **D15: Supabase Cloud, no local Docker. D16: adopt Supabase MCP + RLS hardening** (see below). **SP0 implementation plan written** (`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`).
 - **Spike outcome:** item 1 (MFP nutrition) concluded → D6 revision. Items 2 (Intervals API) & 3 (NotebookLM JSON) **deferred — risks knowingly accepted**, validated in SP1 / SP4.
-- **NEXT ACTION:** complete cloud setup (D15: Supabase CLI + psql + `supabase login` + a dev project), then execute the SP0 plan via **subagent-driven development** (D14).
+- **Cloud setup status:** Supabase CLI 2.104 installed; psql on PATH; `.env.local` set; `select 1` against the cloud DB succeeds; Supabase MCP connected. ⚠️ DB password appeared in transcript once — rotate when convenient.
+- **NEXT ACTION:** awaiting user **"go"** to execute the SP0 plan via **subagent-driven development** (D14, Sonnet-heavy).
 - **Not yet started:** any code, Supabase project, the feasibility spike itself.
 - **Key docs:** this file + `2026-06-03-triathlon-os-sp0-foundation-design.md` (same folder).
 
@@ -119,3 +120,8 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Implications:** the SP0 plan's local-stack commands (`supabase start` / `db reset` / `test db`) are replaced by cloud equivalents (see the plan's "Execution Model" section). **Auth config (invite-only) is set in the cloud project's dashboard**, not via migrations. Recommend a dedicated **dev** project for iterating SP0; add a **prod** project later. Migrations-as-code (D12) is unchanged.
 - **Rejected:** local Supabase via Docker (user declined local infra).
 - **Note:** reuse the user's **pre-existing Supabase Cloud project** as the dev project (created before brainstorming). Verify it has no custom `public` schema objects before the first `db push` to avoid drift.
+
+### D16 — Adopt Supabase MCP (verify/introspect); repo SQL stays source of truth · *Accepted 2026-06-03*
+- **Decision:** use the Supabase MCP for **`get_advisors`** (security/perf lint in verification), **introspection** (`list_tables`/`list_migrations`/`list_extensions`), **type generation**, **`search_docs`**, and ad-hoc `execute_sql` checks. **Migrations stay repo SQL files** applied via `supabase db push --db-url "$SUPABASE_DB_URL"`; pgTAP runs via `psql`. **Do NOT use MCP `apply_migration` to iterate** (per the Supabase skill it writes a history entry per call and breaks `db diff`/`db pull`).
+- **Rationale:** the MCP adds a real automated security audit (`get_advisors`) and reduces reliance on psql/secret-in-shell, without displacing migrations-as-code (D12).
+- **RLS hardening folded into the SP0 plan (from the Supabase skill):** every policy uses `TO authenticated` + ownership predicate `(select auth.uid()) = athlete_id` (role-scoped + planner-cached); `handle_new_user` uses `set search_path = ''` + fully-qualified names (SECURITY DEFINER search-path safety); views already `security_invoker = true`. `user_metadata` is never used for authorization; secret/`service_role`-class keys never reach client code (app uses the publishable key — SP2).
