@@ -924,9 +924,10 @@ values ('11111111-1111-1111-1111-111111111111', 1, 'Ironman 70.3 Test', date '20
   interval '35 minutes', interval '2 hours 40 minutes', interval '1 hour 45 minutes', interval '5 hours 10 minutes')
 on conflict (athlete_id, version) do nothing;
 
--- Global NotebookLM prompt template (athlete_id null = default for everyone)
+-- Global NotebookLM prompt template (athlete_id null = default for everyone). Idempotent via NOT EXISTS
+-- (prompt_templates has no natural unique key, so `on conflict do nothing` would NOT dedupe).
 insert into public.prompt_templates (athlete_id, name, version, template, is_active)
-values (null, 'default-coach', 1,
+select null, 'default-coach', 1,
 $tmpl$You are an evidence-based triathlon coach grounded ONLY in the attached research sources.
 Treat current-goal and current-preference as authoritative. Evaluate current-week-data against current-plan.
 
@@ -934,27 +935,27 @@ PARAMETER CHANGES THIS WEEK:
 {{param_delta}}
 
 Return ONLY valid JSON: {"feedback": string, "sessions": [{"day_of_week": int, "sport": string, "session_type": string, "duration_min": int, "target_zone": string, "rationale": string}]}.
-$tmpl$, true)
-on conflict do nothing;
+$tmpl$, true
+where not exists (
+  select 1 from public.prompt_templates where athlete_id is null and name = 'default-coach' and version = 1
+);
 ```
 
-- [ ] **Step 2: Reset to apply migrations + seed, and verify**
+- [ ] **Step 2: Apply the seed to the cloud dev project (cloud — no `db reset`)**
 
-Run:
 ```bash
-supabase db reset
+set -a; source .env.local; set +a
+psql "$SUPABASE_DB_URL" -f supabase/seed.sql
 ```
-Expected: ends with "Seeding data from supabase/seed.sql..." and no errors.
+Expected: INSERT/UPDATE outputs, no errors. Idempotent — safe to re-run (re-running must NOT change the counts below). (CI's local stack runs `seed.sql` automatically via `supabase db reset`.)
 
-- [ ] **Step 3: Verify seed loaded (manual query)**
+- [ ] **Step 3: Verify seed loaded + idempotent**
 
-The local DB connection string is fixed by Supabase: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`. Run:
 ```bash
-psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
-  -c "select count(*) as athletes from public.athletes;" \
-  -c "select count(*) as global_templates from public.prompt_templates where athlete_id is null;"
+psql "$SUPABASE_DB_URL" -c "select count(*) as athletes from public.athletes;" \
+                        -c "select count(*) as global_templates from public.prompt_templates where athlete_id is null;"
 ```
-Expected: `athletes` = `2`; `global_templates` = `1`.
+Expected: `athletes` = `2`; `global_templates` = `1`. Re-run Step 2 once and re-check — counts must stay `2` / `1`.
 
 - [ ] **Step 4: Commit**
 
