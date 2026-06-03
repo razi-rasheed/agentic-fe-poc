@@ -18,7 +18,7 @@ This project runs on **Supabase Cloud**. We do **not** run a local Docker stack.
 
 **One-time setup (do once, before Task 1):**
 - Install **Supabase CLI**: `brew install supabase/tap/supabase`. Verify `supabase --version`.
-- Install **psql** (to run pgTAP against the cloud DB): `brew install libpq && brew link --force libpq`. Verify `psql --version`.
+- Install **psql** (to run pgTAP against the cloud DB) via the PATH method (no force-link, so a future local Postgres installs conflict-free): `brew install libpq` then add to PATH — `echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc && export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`. Verify `psql --version`.
 - `supabase login` (opens a browser for an access token).
 - Create a Supabase Cloud **dev** project in the dashboard (or `supabase projects create`); note its **project ref** and the **database password** you set.
 - From the project root, `supabase link --project-ref <ref>`.
