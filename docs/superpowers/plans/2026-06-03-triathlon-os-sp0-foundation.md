@@ -265,6 +265,14 @@ git add supabase/migrations supabase/tests/00_harness.sql
 git commit -m "test(sp0): add pgTAP + auth-simulation test helpers"
 ```
 
+> **Note (added during execution):** the `authenticated` role needs `USAGE` on the `tests` schema and `EXECUTE` on `authenticate_as`/`clear_authentication` (so RLS tests can switch users and reset within a transaction). This was added as a separate fix-forward migration `<ts>_sp0_test_helpers_grants.sql`:
+> ```sql
+> grant usage on schema tests to authenticated;
+> grant execute on function tests.authenticate_as(text) to authenticated;
+> grant execute on function tests.clear_authentication() to authenticated;
+> ```
+> `create_supabase_user` is intentionally NOT granted to `authenticated` (it's a SECURITY DEFINER that writes `auth.users` — would be an escalation vector). A fresh run must include this migration before the RLS tests pass.
+
 ---
 
 ### Task 3: `athletes` table + provisioning trigger + RLS
@@ -403,18 +411,17 @@ insert into public.daily_metrics (athlete_id, date, resting_hr) values (tests.ge
 select is((select resting_hr from public.daily_metrics where athlete_id = tests.get_supabase_uid('alice') and date = '2026-06-01'),
   48, 'upsert on (athlete_id,date) updates rather than duplicates');
 
--- RLS isolation on daily_metrics
+-- RLS isolation on daily_metrics (capture bob's id as postgres; authenticated cannot read auth.users)
 select tests.create_supabase_user('bob');
-insert into public.daily_metrics (athlete_id, date, resting_hr) values (tests.get_supabase_uid('bob'), '2026-06-01', 60);
+select tests.get_supabase_uid('bob') as bob_id \gset
+insert into public.daily_metrics (athlete_id, date, resting_hr) values (:'bob_id', '2026-06-01', 60);
 select tests.authenticate_as('alice');
 select is((select count(*) from public.daily_metrics), 1::bigint, 'alice sees only her daily_metrics');
-select tests.clear_authentication();
 
--- RLS: alice cannot insert a row stamped as bob
-select tests.authenticate_as('alice');
+-- RLS with-check: alice (authenticated) cannot write a row stamped as bob.
+-- bob_id is FK-valid (captured above), so the ONLY failure is the RLS WITH CHECK policy → 42501.
 select throws_ok(
-  $$ insert into public.activities (athlete_id, intervals_activity_id, date, sport)
-     values ( (select id from auth.users where email='bob@test.local'), 'x1', '2026-06-01', 'run') $$,
+  format($$insert into public.activities (athlete_id, intervals_activity_id, date, sport) values (%L, 'x1', '2026-06-01', 'run')$$, :'bob_id'),
   '42501',
   null,
   'alice cannot insert an activity stamped as bob (RLS with check)'
