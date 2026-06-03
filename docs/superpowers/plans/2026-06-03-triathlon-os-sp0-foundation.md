@@ -4,7 +4,7 @@
 
 **Goal:** Stand up the multi-tenant Supabase data model for Triathlon OS — every table, Row-Level Security, versioned views, an auth-provisioning trigger, seed data, generated TypeScript types, and a pgTAP test suite — entirely as version-controlled SQL migrations (never the dashboard).
 
-**Architecture:** Supabase CLI migrations (raw SQL) are the single source of truth. Local development runs against a Dockerised Postgres (`supabase start`). Correctness is proven by pgTAP tests run with `supabase test db`, which double as the SP0 verification checklist and the regression baseline for SP1–SP5. RLS (`athlete_id = auth.uid()`) enforces strict tenant isolation; the nightly data engine (SP1) will use the service role, which bypasses RLS.
+**Architecture:** Supabase CLI migrations (raw SQL) are the single source of truth, applied to a **Supabase Cloud** project via `supabase db push` — **no local Docker** (D15). Correctness is proven by pgTAP tests run against the cloud dev project via `psql` (and the full suite in CI on the runner), which double as the SP0 verification checklist and the regression baseline for SP1–SP5. RLS (`athlete_id = auth.uid()`) enforces strict tenant isolation; the nightly data engine (SP1) will use the service role, which bypasses RLS. **See "Prerequisites & Execution Model" below for the exact cloud command substitutions.**
 
 **Tech Stack:** Supabase CLI · PostgreSQL 15+ · pgTAP · Supabase Auth (invite-only) · GitHub Actions (CI). No application code in SP0 (the Next.js app is SP2); only the generated types file is produced.
 
@@ -12,17 +12,38 @@
 
 ---
 
-## Prerequisites (do once, before Task 1)
+## Prerequisites & Execution Model — Supabase Cloud, **no local Docker** (D15)
 
-- **Docker Desktop** installed and **running** (Supabase local stack needs it).
-- **Supabase CLI** installed: `brew install supabase/tap/supabase` (macOS). Verify: `supabase --version`.
-- **Git** repo already initialised at the project root (it is).
+This project runs on **Supabase Cloud**. We do **not** run a local Docker stack. The Supabase CLI manages migrations and types against the **linked cloud project** (none of these commands need Docker).
+
+**One-time setup (do once, before Task 1):**
+- Install **Supabase CLI**: `brew install supabase/tap/supabase`. Verify `supabase --version`.
+- Install **psql** (to run pgTAP against the cloud DB): `brew install libpq && brew link --force libpq`. Verify `psql --version`.
+- `supabase login` (opens a browser for an access token).
+- Create a Supabase Cloud **dev** project in the dashboard (or `supabase projects create`); note its **project ref** and the **database password** you set.
+- From the project root, `supabase link --project-ref <ref>`.
+- Export the cloud DB URL for tests (Project Settings → Database → Connection string → URI; use the **direct** 5432 URI):
+  `export SUPABASE_DB_URL="postgresql://postgres:<db-password>@db.<ref>.supabase.co:5432/postgres"`
+- Enable pgTAP on the cloud DB once: `psql "$SUPABASE_DB_URL" -c 'create extension if not exists pgtap;'`
+- **Invite-only auth is set in the dashboard**, not via migrations: Cloud project → Authentication → Sign In / Providers → **disable new sign-ups**. (Auth config is project settings, not part of `db push`.)
 - All commands run from the project root: `/Users/razi.rasheed/Developer/POCs/tri05`.
 
-> **Conventions used throughout:**
-> - Create each migration with `supabase migration new <name>` (auto-timestamps the filename, preserving order), then paste the SQL into the generated file.
-> - Test command is always `supabase test db` (it resets a fresh DB, applies all migrations, then runs every `supabase/tests/*.sql` file). Requires `supabase start` to have been run once in the session.
-> - pgTAP test files are wrapped in `begin; select plan(N); … select * from finish(); rollback;` — `N` is the exact number of assertions in that file.
+**Command substitutions — apply these THROUGHOUT the tasks below** (the task steps were written local-first):
+
+| Task step says | Run instead (cloud) |
+|---|---|
+| `supabase start` | (skip — cloud, no local stack) |
+| `supabase db reset` | `supabase db push` (applies pending migrations to the linked cloud project) |
+| `supabase test db` | `for f in supabase/tests/*.sql; do echo "== $f =="; psql "$SUPABASE_DB_URL" -f "$f"; done` — pgTAP files self-rollback, so they leave no residue on the cloud DB |
+| `supabase gen types typescript --local` | `supabase gen types typescript --linked` |
+
+**Per-task TDD rhythm becomes:** write the test file → run it via `psql "$SUPABASE_DB_URL" -f supabase/tests/<file>.sql` (RED: "relation … does not exist") → `supabase migration new <name>` + write SQL → `supabase db push` → re-run the test file (GREEN) → commit.
+
+> **Notes:**
+> - Each migration: `supabase migration new <name>` (auto-timestamps, preserving order), paste SQL, then `supabase db push`.
+> - pgTAP files wrap in `begin; select plan(N); … select * from finish(); rollback;` — `N` is the exact assertion count.
+> - **Task 1** below: keep `supabase init` (creates `supabase/config.toml` + dirs) and the config-file edits (they document intent + drive any future local use), but the *active* invite-only setting for the cloud project is the dashboard toggle above. Replace Task 1's `supabase start` with the `login` + `link` steps from setup.
+> - **Task 10 (CI):** unchanged — it runs `supabase db start` + `supabase test db` on the **GitHub runner's** Docker (not your machine), then `db push` to cloud on merge.
 
 ---
 

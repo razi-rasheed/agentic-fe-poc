@@ -1,8 +1,8 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** SP0 designed & approved; feasibility spike **concluded** (D13). **Next action = write the SP0 implementation plan (writing-plans), then subagent-driven implementation (Sonnet-heavy, D14).**
-**Nothing is built yet** — no code, no Supabase project.
+**Phase:** SP0 designed & approved; spike concluded (D13); **SP0 implementation plan written & revised for Supabase Cloud (D15).** **Next action = user completes cloud setup, then GIVES EXPLICIT CONFIRMATION before any implementation begins (subagent-driven, Sonnet-heavy, D14).**
+**Nothing is built yet** — no code, no Supabase project. **Do not start implementation without the user's go-ahead.**
 
 > This is the orientation doc. It deliberately stays shallow and points to the detailed docs. If you're resuming cold, read in this order: **this file → Decision Log → SP0 spec.**
 
@@ -25,7 +25,7 @@ Full vision + the 6 product decisions: SP0 spec §1.
 
 ## Architecture at a glance
 
-- **Stack:** Next.js (TS) on Vercel · Supabase (Postgres + Auth + RLS + Vault) · Python + GitHub Actions (nightly data engine) · Google NotebookLM (manual AI engine) · Intervals.icu (single ingestion source, incl. nutrition) · Google Drive (NotebookLM sources) · Google Calendar (plan sync).
+- **Stack:** Next.js (TS) on Vercel · **Supabase Cloud** (Postgres + Auth + RLS + Vault; **no local Docker** — D15) · Python + GitHub Actions (nightly data engine) · Google NotebookLM (manual AI engine) · Intervals.icu (training/activities/wellness — **nutrition is manual + MFP CSV**, D6) · Google Drive (NotebookLM sources) · Google Calendar (plan sync).
 - **The weekly loop (one line):** Intervals → Supabase nightly → Sunday review (tag/note) → app writes 4 *current* files to Drive + a tiny *delta* prompt → athlete runs NotebookLM → pastes JSON `{feedback, sessions}` back → review/edit → Finalize → Supabase + `current-plan` file + Google Calendar. Last week's plan vs this week's actuals = course correction. (Detail: SP0 spec §3–§4.)
 - **Context model:** bulk state lives in 4 overwrite-in-place Drive files (`current-goal/preference/plan/week-data`) + research PDFs as NotebookLM sources; only the *change delta* goes in the prompt. (D7.)
 

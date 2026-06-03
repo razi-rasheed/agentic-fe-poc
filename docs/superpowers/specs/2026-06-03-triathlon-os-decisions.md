@@ -12,9 +12,9 @@
 - **Product:** Triathlon OS — AI-driven endurance-coaching + tracking platform. Vision/pain points: SP0 spec §1; original handoff captured there.
 - **Decomposed into SP0–SP5** (SP0 spec §8). Each sub-project gets its own spec → plan → implementation cycle.
 - **SP0 (Foundation & Data Model): DESIGNED & APPROVED**, committed. Full schema + RLS + auth + migrations-as-code in the SP0 spec.
-- **Decisions D1–D5, D7–D12: ACCEPTED. D6: REVISED & accepted** (nutrition = manual + MFP CSV import). **D13 (spike): CONCLUDED.** **D14: subagent-driven implementation, Sonnet-heavy** (see below).
-- **Spike outcome:** item 1 (MFP nutrition) concluded → D6 revision. Items 2 (Intervals activities/wellness API) & 3 (NotebookLM JSON output) **deferred — risks knowingly accepted**, to be validated in SP1 / SP4 respectively.
-- **NEXT ACTION:** write the **SP0 implementation plan** (writing-plans skill), then execute via **subagent-driven development** per D14.
+- **Decisions D1–D5, D7–D14: ACCEPTED** (D6 revised: nutrition = manual + MFP CSV import; D13 spike concluded; D14 subagent-driven Sonnet-heavy). **D15: Supabase Cloud, no local Docker** (see below). **SP0 implementation plan written** (`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`).
+- **Spike outcome:** item 1 (MFP nutrition) concluded → D6 revision. Items 2 (Intervals API) & 3 (NotebookLM JSON) **deferred — risks knowingly accepted**, validated in SP1 / SP4.
+- **NEXT ACTION:** complete cloud setup (D15: Supabase CLI + psql + `supabase login` + a dev project), then execute the SP0 plan via **subagent-driven development** (D14).
 - **Not yet started:** any code, Supabase project, the feasibility spike itself.
 - **Key docs:** this file + `2026-06-03-triathlon-os-sp0-foundation-design.md` (same folder).
 
@@ -111,3 +111,10 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Decision:** implement each sub-project (starting SP0) via **subagent-driven development** (`superpowers:subagent-driven-development`) once its implementation plan is written. **Model policy: use Sonnet 4.6 for the bulk of the work; reserve Opus 4.8 for the minimum** (e.g. only where deeper reasoning is genuinely needed — tricky design/review steps).
 - **Rationale:** cost/efficiency — Sonnet 4.6 handles most implementation tasks well; Opus is reserved for high-leverage reasoning. Subagent-driven keeps tasks isolated and reviewable.
 - **Sequence:** writing-plans (SP0 plan) → subagent-driven execution → review checkpoints.
+
+### D15 — Host on Supabase Cloud; no local Docker · *Accepted 2026-06-03*
+- **Decision:** run against **Supabase Cloud**, not a local Docker stack. Deployment targets: **Vercel** (web + API), **Supabase Cloud** (Postgres/Auth/RLS), **Python on GitHub Actions** (data engine). The Supabase CLI manages migrations (`link` + `db push`) and type generation (`gen types --linked`) against the cloud project — none of which need Docker.
+- **Rationale:** user wants zero local-infra management now.
+- **Testing:** pgTAP runs against a cloud **dev** project via `psql` (tests wrap in begin/rollback, leaving no residue); GitHub Actions runs the full pgTAP suite on an ephemeral Supabase stack (the *runner's* Docker, not the developer's) as the merge gate.
+- **Implications:** the SP0 plan's local-stack commands (`supabase start` / `db reset` / `test db`) are replaced by cloud equivalents (see the plan's "Execution Model" section). **Auth config (invite-only) is set in the cloud project's dashboard**, not via migrations. Recommend a dedicated **dev** project for iterating SP0; add a **prod** project later. Migrations-as-code (D12) is unchanged.
+- **Rejected:** local Supabase via Docker (user declined local infra).
