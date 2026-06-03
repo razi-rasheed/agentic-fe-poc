@@ -94,7 +94,7 @@ These are the user's *product-level* decisions that frame everything; the engine
 ### D12 — Migrations-as-code, SQL-first (Supabase CLI); not dashboard, not ORM-as-authority · *Accepted*
 - **Decision:** schema source of truth = Supabase CLI SQL migrations; app uses `supabase-js` + generated types; the dashboard never mutates schema; every future change is a new migration file.
 - **Rationale:** RLS/views/Vault/triggers are Postgres-native — ORMs force raw SQL for them anyway, so SQL-first removes a layer. Programmatic, version-controlled, CI-applied.
-- **Rejected:** dashboard clicks (not reproducible); Drizzle/Prisma as migration authority (splits the source of truth for an RLS-heavy schema; Drizzle optional *later* for typed queries).
+- **Rejected:** dashboard clicks (not reproducible); **Drizzle/Prisma entirely** (decided 2026-06-03 — would split the source of truth for an RLS-heavy schema, and RLS/views/triggers/Vault stay raw SQL regardless). App data layer = **`supabase-js` + generated types**, with RLS enforced automatically via PostgREST/JWT (no manual auth-context handling).
 
 ### D13 — Integration Feasibility Spike before locking SP0 · *Concluded 2026-06-03*
 - **Decision:** run a time-boxed, read-only spike on the **not-owned** integrations before finalising the SP0 schema and building.
@@ -118,3 +118,4 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Testing:** pgTAP runs against a cloud **dev** project via `psql` (tests wrap in begin/rollback, leaving no residue); GitHub Actions runs the full pgTAP suite on an ephemeral Supabase stack (the *runner's* Docker, not the developer's) as the merge gate.
 - **Implications:** the SP0 plan's local-stack commands (`supabase start` / `db reset` / `test db`) are replaced by cloud equivalents (see the plan's "Execution Model" section). **Auth config (invite-only) is set in the cloud project's dashboard**, not via migrations. Recommend a dedicated **dev** project for iterating SP0; add a **prod** project later. Migrations-as-code (D12) is unchanged.
 - **Rejected:** local Supabase via Docker (user declined local infra).
+- **Note:** reuse the user's **pre-existing Supabase Cloud project** as the dev project (created before brainstorming). Verify it has no custom `public` schema objects before the first `db push` to avoid drift.
