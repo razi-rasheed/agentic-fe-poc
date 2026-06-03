@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Sun01Icon, MoonIcon, ComputerPhoneSync01Icon } from '@hugeicons/core-free-icons'
+import { Sun01Icon, MoonIcon, ComputerPhoneSyncIcon } from '@hugeicons/core-free-icons'
 import { useTheme } from 'next-themes'
 
 import { Button } from '@/components/ui/button'
@@ -37,7 +37,7 @@ export function ThemeToggle() {
           Dark
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setTheme('system')}>
-          <HugeiconsIcon icon={ComputerPhoneSync01Icon} className="mr-2 h-4 w-4" />
+          <HugeiconsIcon icon={ComputerPhoneSyncIcon} className="mr-2 h-4 w-4" />
           System
         </DropdownMenuItem>
       </DropdownMenuContent>
