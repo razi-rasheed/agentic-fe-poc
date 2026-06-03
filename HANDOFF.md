@@ -1,7 +1,7 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** SP0 (Foundation & Data Model) **BUILT & VERIFIED** on branch `sp0-foundation` — 9 SQL migrations + 7 pgTAP test files (**41/41 green**) applied to the Supabase Cloud dev project; `get_advisors` clean of all SP0 objects. **Next: integrate the branch, then SP1 (Data Engine).**
+**Phase:** SP0 (Foundation & Data Model) **DONE & MERGED to `main`** — 9 SQL migrations + 7 pgTAP test files (**41/41 green**) on the Supabase Cloud dev project; `get_advisors` clean of all SP0 objects. Now on branch **`sp1-data-engine`**. **Next: brainstorm → spec → plan → build SP1 (Data Engine)** — its own cycle. (`sp0-foundation` branch is redundant now, == main; safe to `git branch -d`.)
 
 **Open items for the user (none block SP0):**
 - 🔑 **Rotate the DB password** (it appeared once in a transcript) → update `.env.local`.
