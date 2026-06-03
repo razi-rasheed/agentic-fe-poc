@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod/v3'
 
 export const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 export type Day = (typeof DAYS)[number]
@@ -14,8 +14,7 @@ export const DayHoursSchema = z.union([
   z.object({ am: z.number().min(0).max(12), pm: z.number().min(0).max(12) }),
 ])
 
-// Use z.record with string key (partial by default in JSON) rather than strict enum record
-export const AvailableHoursSchema = z.record(z.string(), DayHoursSchema).default({})
+export const AvailableHoursSchema = z.record(z.string(), DayHoursSchema)
 
 // Validate h:mm:ss or hh:mm:ss or mm:ss — returns null for empty, throws on bad format
 export function parseIntervalString(value: string | null | undefined): string | null {
@@ -31,20 +30,19 @@ export function parseIntervalString(value: string | null | undefined): string | 
   return trimmed
 }
 
+// Interval field: validate format only, store as raw string in the form.
+// Transformation (null coercion + normalization) happens in the action.
 export const IntervalStringSchema = z
   .string()
   .optional()
   .nullable()
-  .transform((val) => {
-    if (!val || val.trim() === '') return null
-    const trimmed = val.trim()
-    if (!/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-      throw new Error(`Use h:mm:ss format`)
-    }
-    const parts = trimmed.split(':')
-    if (parts.length === 2) return `0:${parts[0]}:${parts[1]}`
-    return trimmed
-  })
+  .refine(
+    (val) => {
+      if (!val || val.trim() === '') return true
+      return /^\d{1,2}:\d{2}(:\d{2})?$/.test(val.trim())
+    },
+    { message: 'Use h:mm:ss format' },
+  )
 
 // ----- Preference Profile -----
 
@@ -85,8 +83,18 @@ export const GoalFormSchema = z.object({
 
 export type GoalFormValues = z.infer<typeof GoalFormSchema>
 
+// Utility: normalise an interval string from the form field to Postgres-compatible format
+// Returns null for empty string.
+export function normaliseInterval(val: string | null | undefined): string | null {
+  if (!val || val.trim() === '') return null
+  const trimmed = val.trim()
+  const parts = trimmed.split(':')
+  if (parts.length === 2) return `0:${parts[0]}:${parts[1]}`
+  return trimmed
+}
+
 // Utility: sum interval strings to compute overall
-// Intervals are "h:mm:ss". Returns null if any segment is null.
+// Intervals are "h:mm:ss". Returns null if all segments are empty/null.
 export function sumSplits(
   swim: string | null | undefined,
   t1: string | null | undefined,

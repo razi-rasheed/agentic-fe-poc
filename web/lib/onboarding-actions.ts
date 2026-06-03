@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { PreferenceFormValues, GoalFormValues } from '@/lib/onboarding-schemas'
+import { normaliseInterval } from '@/lib/onboarding-schemas'
 
 export async function savePreferenceProfile(
   data: PreferenceFormValues,
@@ -68,12 +69,12 @@ export async function saveGoalManifest(
     race_name: data.race_name,
     race_date: data.race_date,
     race_url: raceUrl,
-    target_swim_time: data.target_swim_time ?? null,
-    target_t1_time: data.target_t1_time ?? null,
-    target_bike_time: data.target_bike_time ?? null,
-    target_t2_time: data.target_t2_time ?? null,
-    target_run_time: data.target_run_time ?? null,
-    target_overall_time: data.target_overall_time ?? null,
+    target_swim_time: normaliseInterval(data.target_swim_time),
+    target_t1_time: normaliseInterval(data.target_t1_time),
+    target_bike_time: normaliseInterval(data.target_bike_time),
+    target_t2_time: normaliseInterval(data.target_t2_time),
+    target_run_time: normaliseInterval(data.target_run_time),
+    target_overall_time: normaliseInterval(data.target_overall_time),
     notes: data.notes ?? null,
     change_reason: data.change_reason ?? null,
   })
