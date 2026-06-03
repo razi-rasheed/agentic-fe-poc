@@ -1,7 +1,7 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** SP0 **DONE & MERGED to `main`** (9 migrations + 7 pgTAP files, 41/41 green; advisor-clean). **SP2 (Review UI) — design spec COMPLETE** — reprioritized ahead of SP1 (D17) and specified for **external build in Figma Make** (D18). On branch **`sp2-review-ui`**. **Next: build SP2 in Figma Make from the spec; SP1/SP3 backend automation come later.** (`sp0-foundation` branch is redundant, == main; safe to `git branch -d`.)
+**Phase:** SP0 **DONE & MERGED to `main`**. **SP2 (Review UI): design spec + `DESIGN.md` complete, and its DB schema migrated to the cloud dev project** (full pgTAP **54/54 green**, advisor-clean). Reprioritized ahead of SP1 (D17); built as a **hand/AI-coded Next.js + shadcn app** (D18, design system = shadcn preset `b5pZXjoX4i`). On branch **`sp2-review-ui`**. **Next: build the SP2 Next.js + shadcn UI from the spec against the ready schema; SP1/SP3 backend automation later.** (`sp0-foundation` branch is redundant, == main; safe to `git branch -d`.)
 
 **Open items for the user (none block SP0):**
 - 🔑 **Rotate the DB password** (it appeared once in a transcript) → update `.env.local`.
@@ -27,7 +27,8 @@ Full vision + the 6 product decisions: SP0 spec §1.
 | **`docs/superpowers/specs/2026-06-03-triathlon-os-decisions.md`** | Decision Log — every architecture decision (D1–D13) with rationale + alternatives rejected. The "why." |
 | **`docs/superpowers/specs/2026-06-03-triathlon-os-sp0-foundation-design.md`** | SP0 spec — full architecture context (stack, weekly loop, files-vs-prompt model) + the detailed, buildable Foundation/Data-Model design (schema, RLS, auth, migrations-as-code). |
 | **`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`** | SP0 **implementation plan** — 10 TDD tasks (migrations + pgTAP), executed. |
-| **`docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`** | **SP2 Review UI spec** — the whole user-facing app, self-contained for an external builder (Figma Make → React + Supabase). |
+| **`docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`** | **SP2 Review UI spec** — the whole user-facing app (screens, data contract, NotebookLM JSON, acceptance). Built as Next.js + shadcn + supabase-js. |
+| **`docs/superpowers/specs/DESIGN.md`** | **UI design system** — shadcn/ui preset `b5pZXjoX4i`, next-themes light/dark, component/theming guidelines. Authoritative for SP2's look. |
 
 ## Architecture at a glance
 
@@ -40,18 +41,18 @@ Full vision + the 6 product decisions: SP0 spec §1.
 | # | Sub-project | Status |
 |---|-------------|--------|
 | **SP0** | Foundation & Data Model (schema, RLS, auth, migrations-as-code) | ✅ **Built & verified** (branch `sp0-foundation`, 41/41 pgTAP green) |
-| **SP2** | **Review UI — the whole user-facing app** (onboard, manual entry, 4-pillar review, tags/notes, MFP CSV, Profile/Goal versioning, Generate, paste-plan, review/approve, **Google Calendar**, history) | ✅ **Spec complete — external build (Figma Make)** |
+| **SP2** | **Review UI — the whole user-facing app** (onboard, manual entry, 4-pillar review, tags/notes, MFP CSV, Profile/Goal versioning, races catalog + race-results, Generate, paste-plan, review/approve, **Google Calendar**, history, admin) | ✅ **Spec + DESIGN.md + schema done; build the Next.js+shadcn UI** |
 | SP1 | Data Engine (Intervals.icu → normalise → Supabase, nightly) — backend automation | Roadmap |
 | SP3 | Context Bridge (automate maintaining the 4 NotebookLM source files; Google/Drive) — backend automation | Roadmap |
 | ~~SP4 / SP5~~ | NotebookLM-loop UI + Calendar sync — **folded into SP2** | (in SP2 spec) |
 
 Revised order (D17): `SP0 → SP2 (UI, incl. the SP4/SP5 user-facing loop) → SP1 / SP3 (backend automation)`. The NotebookLM hand-off in SP2 is manual (copy source docs + delta prompt) until SP3 automates it; data is entered manually until SP1 automates it.
 
-## ▶ Next action: build SP2 in Figma Make from the spec
+## ▶ Next action: build the SP2 Next.js + shadcn UI from the spec
 
-SP0 is built, green, and merged to `main`. SP2's design spec is complete **and its DB schema is already migrated onto the cloud dev project** — so Figma Make builds against a ready backend.
+SP0 is built, green, and merged to `main`. SP2's design spec + `DESIGN.md` are complete **and its DB schema is already migrated onto the cloud dev project** — so the UI builds against a ready backend.
 - **Cloud DB now has** (beyond SP0): `athletes.is_admin`; `preference_profiles` mixed-granularity `available_hours` + `long_swim/bike/run_day`; `races` (shared catalog, admin-write); `goal_manifests.race_id`/`race_url`/`goal_type`; `race_results` (per-athlete, private/public). Seed includes 2 sample races, Alice as admin, a linked goal + a public result. **Full pgTAP suite 54/54 green; advisor clean of all our objects.** (Migrations on branch `sp2-review-ui`.)
-1. **Build SP2** in **Figma Make** (React + Supabase) from `docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`. Point it at the existing Supabase project; use the publishable key; RLS handles isolation.
+1. **Build SP2** as a **Next.js + shadcn/ui** app: `npx shadcn@latest init --preset b5pZXjoX4i --base base --template next` (see `DESIGN.md`), then implement screens from `2026-06-03-triathlon-os-sp2-review-ui-design.md` using `supabase-js` (publishable key; RLS handles isolation).
 2. **Later (backend automation):** **SP1** — Python + GitHub Actions nightly Intervals.icu pull (training load, activities, physiological wellness — **not** nutrition; D6) → normalise → upsert; validates the deferred Intervals API field mapping (D13) and stores the Intervals key in Supabase Vault. **SP3** — automate the NotebookLM source-file maintenance (Drive). Each is its own brainstorm → spec → plan → build cycle.
 
 What's on the cloud dev DB now: 10 tables + 2 views, RLS on all, seed (2 athletes + global prompt template), 9 migrations applied. Generated types at `src/lib/database.types.ts`. Local loop: `set -a; source .env.local; set +a; export PATH="/opt/homebrew/opt/libpq/bin:$PATH"` then `supabase db push --db-url "$SUPABASE_DB_URL"` / `psql "$SUPABASE_DB_URL" -f supabase/tests/*.sql`.
