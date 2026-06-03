@@ -21,3 +21,9 @@ Ideas raised during design but deliberately **deferred** — not yet refined int
 - **BL-03 — Per-sport frequency / volume split** · *Status: unrefined*
   Minimum frequency or weekly hours per discipline (e.g. swim ≥ 2×/week, or an explicit hours split across swim/bike/run). Shapes balance across the three sports.
   *Area:* Preference Profile.
+
+## Goals (Goal Manifest)
+
+- **BL-04 — Race priority (A / B / C) & multiple target races** · *Status: unrefined*
+  Support a season with a primary **A-race** plus secondary **B/C** races (priority levels), instead of a single target race — so the coach can periodise toward multiple events. For now the goal targets **one primary race**.
+  *Area:* Goal Manifest (SP0 schema + SP2 goal form).
