@@ -1,0 +1,194 @@
+# Triathlon OS — SP2: Review UI Design Spec
+
+**Date:** 2026-06-03
+**Status:** Approved design. **Deliverable spec — intended to be built elsewhere (Figma Make).** Not implemented in this repo.
+**Build target:** an AI UI builder (Figma Make) generating a **React** web app backed by **Supabase** (auth + Postgres + RLS). The spec is self-contained: it includes the data contract, so it does not require the rest of this repo to build.
+
+> **How to use this doc:** it is both a design spec and a build brief. Sections 1–4 give context; §5 is the Supabase data contract; §6–§8 are the screens, visual system, and behaviors a builder needs; §9 is the NotebookLM contract; §10 is acceptance criteria. A builder can paste the relevant sections into Figma Make.
+
+---
+
+## 1. Context
+
+**Triathlon OS** is an AI-driven coaching + tracking app for endurance athletes. The athlete trains during the week; once a week (the "Sunday review") they look at the week's data across four pillars, add subjective context, and hand a richly-contextualised package to an AI coach (Google NotebookLM, used manually) that returns a course-corrected next-week plan. Multi-tenant, with strict per-athlete data isolation.
+
+**SP2 (this spec) is the entire user-facing app** — the Review UI. It lets an athlete onboard, enter and review their week, capture subjective context, generate the NotebookLM hand-off, paste the AI's plan back, review/approve it, and push it to their calendar. It runs against the already-built database (SP0).
+
+**What's deferred (so SP2 must stand alone without them):**
+- **SP1** — nightly automated ingestion from Intervals.icu. Until it exists, **the athlete enters the week's data manually** (and imports nutrition via MyFitnessPal CSV).
+- **SP3** — the *automated* Google Drive bridge that maintains NotebookLM's source files. Until it exists, the app **renders the source-doc text for the athlete to copy into NotebookLM by hand**.
+
+## 2. The weekly loop (why these screens exist)
+
+```
+Onboard once: set Preference Profile + Goal Manifest.
+Each week:
+  1. Enter the week's data (manual): activities + daily physiological/load/nutrition.   [Review screen]
+  2. Review the 7 days across 4 pillars; tag workouts; add subjective notes.            [Review screen]
+  3. If life changed, edit Profile/Goal (creates a new version + a "what changed" note). [Context screen]
+  4. Lock & Generate → copy 4 "current" source docs into NotebookLM + paste the delta
+     prompt. NotebookLM (external) returns JSON {feedback, sessions}.                    [Generate screen]
+  5. Paste the JSON back → app validates + stores it as a proposed plan + feedback.      [Paste screen]
+  6. Review/edit the proposed 7-day plan; Approve.                                       [Review-plan screen]
+  7. Push approved sessions to Google Calendar.                                          [Calendar]
+  Course correction: next week, the coach compares the prescribed plan vs the actuals.
+```
+
+## 3. Scope
+
+**In scope:** sign-in (invite-only), onboarding, weekly review with manual data entry + tagging/notes, MyFitnessPal CSV nutrition import, Profile/Goal editing with versioning, Generate (source docs + delta prompt), paste-plan + validation, plan review/approve, Google Calendar sync, history (feedback journal + past plans + version history), settings.
+
+**Out of scope:** nightly Intervals automation (SP1); the *automated* Drive bridge (SP3 — done manually here); the actual NotebookLM tool (external); Intervals API-key handling; any data the app can't get without SP1 is entered manually.
+
+## 4. Roles & tenancy
+
+- **One athlete per account.** Invite-only — no public sign-up.
+- **Strict isolation:** every query is automatically scoped to the signed-in athlete by Postgres Row-Level Security (`athlete_id = auth.uid()`). The UI never needs to filter by athlete; Supabase enforces it. Never show or allow writing another athlete's data.
+
+---
+
+## 5. Supabase data contract
+
+The app uses `supabase-js` with the project's **publishable/anon key**; the signed-in user's JWT drives RLS. Tables already exist (SP0). Relevant tables and the fields SP2 reads/writes:
+
+- **`athletes`** — `id` (= auth user id), `display_name`, `email`, `intervals_athlete_id`, `google_calendar_id`, `timezone`. Auto-created on sign-up (DB trigger). SP2 reads it; Settings may edit `display_name`, `timezone`.
+- **`daily_metrics`** — one row per `(athlete_id, date)`. Fields: physiological (`resting_hr`, `hrv`, `sleep_hours`, `sleep_score`, `readiness`, `body_weight`), training load (`ctl`, `atl`, `tsb`, `daily_load`), nutrition (`calories`, `carbs_g`, `protein_g`, `fat_g`, `hydration_ml`), `notes` (subjective day note). Upsert on `(athlete_id, date)`. **SP2 writes these manually.**
+- **`activities`** — one row per workout. `intervals_activity_id` (use a generated id like `manual-<uuid>` for manual entries), `date`, `start_time`, `sport` (swim/bike/run/strength/other), `name`, `duration_s`, `distance_m`, `avg_pace`, `avg_hr`, `max_hr`, `avg_power`, `elevation_gain_m`, `load`, `intensity`, `tags` (text[]), `athlete_note`. Unique on `(athlete_id, intervals_activity_id)`. **SP2 writes these manually + adds tags/notes.**
+- **`preference_profiles`** — append-only versioned. `version`, `valid_from`, `max_hours_per_week`, `available_days` (jsonb e.g. `{"mon":["am"],"tue":["am","pm"],...}`), `preferred_long_ride_day`, `preferred_long_run_day`, `rest_day`, `constraints_notes`, `change_reason`. Editing = insert a new version (`version` = current max + 1). A view `current_preference_profile` returns the latest per athlete.
+- **`goal_manifests`** — append-only versioned. `version`, `valid_from`, `race_name`, `race_date`, `race_type` (sprint/olympic/70.3/ironman), `target_swim_time`/`target_bike_time`/`target_run_time`/`target_t1_time`/`target_t2_time`/`target_overall_time` (Postgres `interval`), `notes`, `change_reason`. Same versioning + `current_goal_manifest` view.
+- **`weekly_reviews`** — one per `(athlete_id, week_start)`. `status` ('open' | 'locked'), `locked_at`, `rendered_prompt` (the generated delta prompt, stored for audit). Created/locked by the Generate screen.
+- **`plans`** — one per `(athlete_id, week_start, version)`. `status` ('proposed' | 'approved' | 'synced'), `source` ('notebooklm'), `raw_json` (the exact pasted JSON), `created_at`, `approved_at`, `synced_at`.
+- **`plan_sessions`** — one per prescribed session. `plan_id`, `athlete_id`, `day_of_week` (1=Mon..7=Sun), `sport`, `session_type`, `duration_min`, `target_zone`, `target_metrics` (jsonb), `rationale`, `sort_order`, `google_event_id` (set on sync). Note: a session's `(plan_id, athlete_id)` must match its plan (DB enforces it).
+- **`weekly_feedback`** — one per `(athlete_id, week_start)`. `feedback_text`, `source_plan_id`. The coach's commentary; shown in History.
+- **`prompt_templates`** — `athlete_id` (null = global default), `name`, `version`, `template` (text with placeholders), `is_active`. SP2 reads the active template (athlete override if present, else global default) to render the prompt.
+
+`week_start` convention: the **Monday** of the week (ISO). All dates in the athlete's `timezone`.
+
+---
+
+## 6. Screens
+
+Common shell: a minimal authenticated layout with light left-nav (or top-nav on mobile): **Review** (home), **Context**, **Plan**, **History**, **Settings**. A persistent week-context (which week you're reviewing) where relevant. Toaster for success/error.
+
+### 6.1 Sign in
+- Centered card, product wordmark, single email field, "Send magic link" button. Supabase magic-link auth. Invite-only: unknown emails get a neutral "If you have an invite, check your email" message (don't reveal existence).
+- States: idle, sending, link-sent confirmation, error.
+
+### 6.2 Onboarding (first run, if no Profile/Goal yet)
+- Two sequential steps with a progress indicator:
+  - **Step 1 — Preference Profile:** max hours/week (number); weekly availability grid (Mon–Sun × AM/PM toggles → `available_days` jsonb); preferred long-ride day, preferred long-run day, rest day (day pickers); free-text constraints. 
+  - **Step 2 — Goal Manifest:** race name, race date (date), race type (select), target times for swim/bike/run/T1/T2/overall (duration inputs `h:mm:ss`), notes.
+- "Finish" writes version 1 of each, lands on Review. Both steps skippable-later but encouraged.
+- States: empty (defaults), saving, error.
+
+### 6.3 Weekly Review (home) — the core screen
+Header: **week selector** (default = current week; navigate to prior weeks, read-only display of metrics, editable for the current/locked-pending week), week date range, and the primary **"Lock & Generate"** button (disabled with a hint until the week has at least some data).
+
+Body — the **4 pillars** for Mon–Sun, calm and scannable:
+- **Day rail (Mon–Sun):** a compact row/column of 7 day cards. Each day card surfaces: readiness/sleep score, resting HR/HRV, training load (and CTL/ATL/TSB trend), nutrition totals (cals + macros), and a count of activities. A day with no data shows an "Add data" affordance.
+- **Daily physiological/load/nutrition entry:** clicking a day opens inline editing (a side panel or expandable row) with the `daily_metrics` fields grouped as Physiological / Training Load / Nutrition. Save = upsert on `(athlete_id, date)`.
+- **Activities (Physical Output):** under each day, a list of workouts. **Add activity** (sport, name, start time, duration, distance, avg/max HR, avg power, elevation, load, intensity). Each activity has **tag chips** (free-text `tags[]`, with a few suggested: `Z2`, `threshold`, `VO2`, `recovery`, `long`, `brick`) and a per-workout **note**.
+- **Subjective day note:** a text field per day ("how did you feel?").
+- **Nutrition import:** an **"Import MyFitnessPal CSV"** action → file upload → parse meal-level rows → aggregate to daily totals → pre-fill `calories/carbs_g/protein_g/fat_g` for the matching dates (let the athlete confirm before saving). (MFP Premium export is a zip of CSVs; accept the meal/nutrition CSV.)
+- States: empty week (clear call to add data or import), partial, loading, save errors, "week locked" (read-only with a banner + link to Generate).
+
+### 6.4 Context (Profile & Goal)
+- Two cards: **current Preference Profile** and **current Goal Manifest** (from the `current_*` views), each with an **Edit** action.
+- Editing opens the same forms as onboarding, pre-filled. Saving prompts for an optional **`change_reason`** ("why did this change?") and writes a **new version** (don't mutate the old one).
+- Show a **"Changed since last lock"** summary (diff of current vs the version at the last `weekly_reviews.locked_at`) — this is what the delta prompt will carry.
+- States: viewing, editing, saving, version-history link (to History).
+
+### 6.5 Generate (Lock & hand-off)
+Reached from "Lock & Generate". Two clearly separated parts with copy buttons:
+1. **Source docs for NotebookLM** (faithful to design D7 — bulk context lives in NotebookLM *sources*): four copyable text blocks the athlete keeps as NotebookLM sources, updating the changed ones each week:
+   - `current-goal` — the current Goal Manifest, rendered readable.
+   - `current-preference` — the current Preference Profile, rendered readable.
+   - `current-plan` — last week's approved plan (the prescribed baseline); empty on week 1.
+   - `current-week-data` — this week's actuals across all 4 pillars + tags/notes, rendered compactly (markdown table).
+   Each block has a **Copy** button and a one-line "paste/update this as a NotebookLM source" hint. A short top note explains the one-time setup (also add research PDFs as sources).
+2. **The prompt to paste** — the **delta prompt**, rendered from the active `prompt_templates.template` with placeholders filled: the parameter changes since last lock (previous→current + `change_reason`), the week range, and the required output JSON schema. One **Copy** button.
+- On reaching this screen, create/lock the `weekly_reviews` row (`status='locked'`, `locked_at=now`, store `rendered_prompt`).
+- States: generating, ready (docs + prompt shown), already-locked (re-show the stored prompt).
+
+### 6.6 Paste plan
+- A large textarea: "Paste the JSON NotebookLM returned." A **Validate & Save** button.
+- Validate against the schema (§9). On success: insert a `plans` row (`status='proposed'`, `raw_json` = the exact paste, `week_start` = the week, `version` = max+1), the `plan_sessions`, and the `weekly_feedback` row. Navigate to Review plan.
+- On failure: show **specific, friendly validation errors** (which field, what's wrong) without losing the pasted text. Common cases: not JSON, missing `sessions`, a session missing a required field, bad enum.
+- States: empty, validating, error (with details), success.
+
+### 6.7 Review plan
+- Shows the **feedback** (coach commentary) prominently at top, then the **proposed 7-day plan** as an editable list or week-calendar: per session — day, sport, session_type, duration_min, target_zone, rationale. Inline-editable; add/remove sessions.
+- Primary action **Approve** (`status='approved'`, `approved_at=now`), then offer **Push to Google Calendar** (or auto-push on approve — see 6.8). `raw_json` is preserved even after edits (audit of the original).
+- States: proposed (editable), approving, approved, synced.
+
+### 6.8 Calendar sync
+- Requires a connected Google account (Settings). On approve (or via an explicit "Add to Google Calendar" button), create **one event per session** on the athlete's calendar at sensible default times (or let them set a daily default time), tagged by sport/type, with the rationale in the event description. Store each event id in `plan_sessions.google_event_id`; set `plans.status='synced'`, `synced_at`.
+- States: not connected (CTA to connect), syncing, synced (with links), partial failure (retry).
+
+### 6.9 History
+- **Feedback journal:** reverse-chronological list of `weekly_feedback` (week + commentary) — the coaching narrative over time.
+- **Past plans:** read-only view of prior `plans` + their sessions.
+- **Version history:** Profile/Goal versions with `change_reason` and `valid_from`.
+
+### 6.10 Settings
+- Connect/disconnect **Google Calendar**; default session time-of-day; display name, timezone; sign out. (Intervals API key is **not** handled here — that's SP1.)
+
+---
+
+## 7. Visual design system — calm & minimal
+
+- **Vibe:** restrained, premium, typography-forward (Linear / Notion / Things). Generous whitespace; content in soft cards on a near-white background. Low cognitive load — this is a once-a-week reflective review, not a hype dashboard.
+- **Color:** neutral greys for structure; a single calm accent (e.g. a muted teal/indigo) for primary actions and key data; reserve semantic colors (success/warn/error) for states. Optionally a subtle per-sport hue for swim/bike/run chips. **Light mode default**, dark mode supported.
+- **Type:** one clean sans (e.g. Inter); clear hierarchy; tabular figures for metrics.
+- **Data viz:** gentle and minimal — sparklines / small area charts for load (CTL/ATL/TSB) and trends; avoid heavy chart chrome. Numbers first, charts as quiet support.
+- **Components:** soft rounded cards, subtle borders/shadows, calm chips for tags, inline-editable fields, side panels for entry, a clear primary button per screen, unobtrusive toasts.
+- **Layout:** desktop-first (the Sunday review happens at a desk) but fully responsive; the day rail collapses gracefully on mobile.
+- **Tone of copy:** warm, concise, coach-like. Empty states encourage ("Add your first session" / "Import your week from MyFitnessPal").
+
+## 8. Cross-cutting behaviors
+
+- **States everywhere:** every screen handles empty / loading / error / success. Saves are optimistic where safe, with toasts.
+- **Validation:** strongest on the Paste screen (§9). Forms validate inline (durations as `h:mm:ss`, dates, numbers ≥ 0).
+- **Accessibility:** keyboard-navigable, labeled inputs, sufficient contrast, focus states.
+- **No secrets in the client:** only the publishable/anon Supabase key; RLS does isolation. Google tokens handled by the builder's auth integration, not stored in plain client state.
+- **Timezones:** all dates in the athlete's `timezone`; `week_start` = Monday.
+
+## 9. NotebookLM contract
+
+**Output the app must parse (paste screen).** NotebookLM is prompted (via `prompt_templates`) to return ONLY this JSON:
+```json
+{
+  "feedback": "string — commentary on the past week",
+  "sessions": [
+    {
+      "day_of_week": 1,                 // 1=Mon .. 7=Sun
+      "sport": "run",                   // swim | bike | run | strength | other
+      "session_type": "Z2 endurance",
+      "duration_min": 60,
+      "target_zone": "Z2",
+      "rationale": "string — why this session"
+    }
+  ]
+}
+```
+Validation: must be valid JSON; `feedback` non-empty string; `sessions` a non-empty array; each session has `day_of_week` (int 1–7), `sport` (string), `session_type` (string), `duration_min` (int > 0), `target_zone` (string), `rationale` (string). Be lenient on extra keys (ignore) and on a fenced ```json code block (strip fences before parsing). Store the raw paste in `plans.raw_json` regardless.
+
+**Input the app produces (generate screen):** the 4 source docs (§6.5) + a delta prompt rendered from the active template, injecting previous→current parameter changes (with `change_reason`) and the schema above.
+
+## 10. Acceptance criteria
+
+1. Invite-only sign-in works; a signed-in athlete sees only their own data on every screen (RLS).
+2. First-run onboarding writes version 1 of Preference Profile + Goal Manifest.
+3. The athlete can manually add/edit a full week of data (activities + daily metrics + nutrition), tag workouts, and add day notes; nutrition can be bulk-filled from a MyFitnessPal CSV.
+4. Editing Profile/Goal creates a new version (old preserved) with an optional `change_reason`, and the "changed since last lock" delta is shown.
+5. "Lock & Generate" locks the week and produces the 4 copyable source docs + a copyable delta prompt; the prompt is stored in `weekly_reviews.rendered_prompt`.
+6. Pasting valid plan JSON stores a proposed plan + sessions + feedback; invalid JSON shows specific errors and loses nothing.
+7. The proposed plan is reviewable/editable; Approve sets `approved`; calendar push creates one event per session and records `google_event_id`, setting `synced`.
+8. History shows the feedback journal, past plans, and Profile/Goal version history.
+9. Visual result reads as calm & minimal, light-default, responsive.
+
+## 11. Notes for whoever builds this
+
+- Built in **Figma Make** (or similar) as a **React + Supabase** app. Point it at the existing Supabase project; use the publishable key; rely on RLS for isolation.
+- This spec deliberately includes the **data contract** (§5) and the **NotebookLM JSON** (§9) so it's self-contained.
+- When **SP1** lands, manual data entry becomes a fallback (data auto-arrives); when **SP3** lands, the Generate screen's manual "copy these source docs" step is replaced by automated Drive sync. Design the Generate and entry screens so those can be swapped without reworking the rest.
