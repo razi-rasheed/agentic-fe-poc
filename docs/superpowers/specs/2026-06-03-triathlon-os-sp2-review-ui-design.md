@@ -36,7 +36,7 @@ Each week:
 
 ## 3. Scope
 
-**In scope:** sign-in (invite-only), onboarding, weekly review with manual data entry + tagging/notes, MyFitnessPal CSV nutrition import, Profile/Goal editing with versioning, Generate (source docs + delta prompt), paste-plan + validation, plan review/approve, Google Calendar sync, history (feedback journal + past plans + version history), settings.
+**In scope:** sign-in (invite-only), onboarding, weekly review with manual data entry + tagging/notes, MyFitnessPal CSV nutrition import, Profile/Goal editing with versioning (incl. mixed-granularity availability, per-discipline long days, `goal_type`, race linkage + "targets from history"), **browse/select the shared `races` catalog**, **personal `race_results` history with private/public visibility**, **admin race-catalog management (admins only)**, Generate (source docs + delta prompt), paste-plan + validation, plan review/approve, Google Calendar sync, history (feedback journal + past plans + version history), settings.
 
 **Out of scope:** nightly Intervals automation (SP1); the *automated* Drive bridge (SP3 — done manually here); the actual NotebookLM tool (external); Intervals API-key handling; any data the app can't get without SP1 is entered manually.
 
@@ -51,16 +51,18 @@ Each week:
 
 The app uses `supabase-js` with the project's **publishable/anon key**; the signed-in user's JWT drives RLS. Tables already exist (SP0). Relevant tables and the fields SP2 reads/writes:
 
-- **`athletes`** — `id` (= auth user id), `display_name`, `email`, `intervals_athlete_id`, `google_calendar_id`, `timezone`. Auto-created on sign-up (DB trigger). SP2 reads it; Settings may edit `display_name`, `timezone`.
+- **`athletes`** — `id` (= auth user id), `display_name`, `email`, `intervals_athlete_id`, `google_calendar_id`, `timezone`, **`is_admin`** (bool; gates the race-catalog admin screens — the platform owner sets their own flag once via the dashboard). Auto-created on sign-up (DB trigger). SP2 reads it; Settings may edit `display_name`, `timezone`.
 - **`daily_metrics`** — one row per `(athlete_id, date)`. Fields: physiological (`resting_hr`, `hrv`, `sleep_hours`, `sleep_score`, `readiness`, `body_weight`), training load (`ctl`, `atl`, `tsb`, `daily_load`), nutrition (`calories`, `carbs_g`, `protein_g`, `fat_g`, `hydration_ml`), `notes` (subjective day note). Upsert on `(athlete_id, date)`. **SP2 writes these manually.**
 - **`activities`** — one row per workout. `intervals_activity_id` (use a generated id like `manual-<uuid>` for manual entries), `date`, `start_time`, `sport` (swim/bike/run/strength/other), `name`, `duration_s`, `distance_m`, `avg_pace`, `avg_hr`, `max_hr`, `avg_power`, `elevation_gain_m`, `load`, `intensity`, `tags` (text[]), `athlete_note`. Unique on `(athlete_id, intervals_activity_id)`. **SP2 writes these manually + adds tags/notes.**
-- **`preference_profiles`** — append-only versioned. `version`, `valid_from`, `max_hours_per_week`, `available_days` (jsonb e.g. `{"mon":["am"],"tue":["am","pm"],...}`), `preferred_long_ride_day`, `preferred_long_run_day`, `rest_day`, `constraints_notes`, `change_reason`. Editing = insert a new version (`version` = current max + 1). A view `current_preference_profile` returns the latest per athlete.
-- **`goal_manifests`** — append-only versioned. `version`, `valid_from`, `race_name`, `race_date`, `race_type` (sprint/olympic/70.3/ironman), `target_swim_time`/`target_bike_time`/`target_run_time`/`target_t1_time`/`target_t2_time`/`target_overall_time` (Postgres `interval`), `notes`, `change_reason`. Same versioning + `current_goal_manifest` view.
+- **`preference_profiles`** — append-only versioned. `version`, `valid_from`, `max_hours_per_week`, **`available_hours`** (jsonb, **mixed-granularity per day** — omit a day = unspecified; each present day is either `{"hours": 4}` (day total) or `{"am": 2, "pm": 1}` (AM/PM split), e.g. `{"sat":{"hours":4},"wed":{"am":2,"pm":1}}`), **`long_swim_day`** / **`long_bike_day`** / **`long_run_day`**, `rest_day`, `constraints_notes`, `change_reason`. Editing = insert a new version (`version` = current max + 1). View `current_preference_profile` = latest per athlete.
+- **`goal_manifests`** — append-only versioned. `version`, `valid_from`, **target race**: `race_id` → `races` (catalog) **or** free-text `race_name` + `race_date` + `race_url` (when not in the catalog — same rule as `race_results`), **`goal_type`** ('finish' | 'target_time' | 'placement'), `target_swim_time`/`target_t1_time`/`target_bike_time`/`target_t2_time`/`target_run_time`/`target_overall_time` (Postgres `interval`), `notes`, `change_reason`. Same versioning + `current_goal_manifest` view. (One primary race for now; A/B/C priority deferred — see BACKLOG BL-04.)
 - **`weekly_reviews`** — one per `(athlete_id, week_start)`. `status` ('open' | 'locked'), `locked_at`, `rendered_prompt` (the generated delta prompt, stored for audit). Created/locked by the Generate screen.
 - **`plans`** — one per `(athlete_id, week_start, version)`. `status` ('proposed' | 'approved' | 'synced'), `source` ('notebooklm'), `raw_json` (the exact pasted JSON), `created_at`, `approved_at`, `synced_at`.
 - **`plan_sessions`** — one per prescribed session. `plan_id`, `athlete_id`, `day_of_week` (1=Mon..7=Sun), `sport`, `session_type`, `duration_min`, `target_zone`, `target_metrics` (jsonb), `rationale`, `sort_order`, `google_event_id` (set on sync). Note: a session's `(plan_id, athlete_id)` must match its plan (DB enforces it).
 - **`weekly_feedback`** — one per `(athlete_id, week_start)`. `feedback_text`, `source_plan_id`. The coach's commentary; shown in History.
 - **`prompt_templates`** — `athlete_id` (null = global default), `name`, `version`, `template` (text with placeholders), `is_active`. SP2 reads the active template (athlete override if present, else global default) to render the prompt.
+- **`races`** — **shared, owner-curated catalog** (not per-athlete). RLS: **read = any authenticated athlete; write = admins only** (`athletes.is_admin`). Fields — *identity:* `name`, `description`, `image_url`, `thumbnail_url`, `url`; *course:* `swim_type` (lake/sea/river/ocean/pool), `bike_terrain` (flat/rolling/hilly/mountainous), `run_terrain` (flat/rolling/hilly/trail); *conditions:* `temp_high_c`, `temp_low_c`, `water_temp_c`; *where/when:* `location`, `city`, `country`, `date`; *classification:* `distance_type` (sprint/olympic/70.3/ironman/…), `race_organizer`, `race_type`, `race_category`; *cutoffs (inform goals):* `cutoff_swim`, `cutoff_bike`, `cutoff_run`, `cutoff_overall` (intervals). Athletes browse/select; the owner curates via the admin screen.
+- **`race_results`** — **per-athlete** finishing-time history. RLS: **read = own rows + any row with `visibility='public'`; write = own only**. Fields: `race_id` → `races` (if catalogued) **or** free-text `race_name` + `race_url`, `result_date`, `finish_swim`/`finish_t1`/`finish_bike`/`finish_t2`/`finish_run`/`finish_overall` (intervals), `placement`, `category_place`, **`visibility`** ('private' default | 'public'), `notes`. Multiple rows = history; used to set realistic goal targets.
 
 `week_start` convention: the **Monday** of the week (ISO). All dates in the athlete's `timezone`.
 
@@ -76,8 +78,8 @@ Common shell: a minimal authenticated layout with light left-nav (or top-nav on 
 
 ### 6.2 Onboarding (first run, if no Profile/Goal yet)
 - Two sequential steps with a progress indicator:
-  - **Step 1 — Preference Profile:** max hours/week (number); weekly availability grid (Mon–Sun × AM/PM toggles → `available_days` jsonb); preferred long-ride day, preferred long-run day, rest day (day pickers); free-text constraints. 
-  - **Step 2 — Goal Manifest:** race name, race date (date), race type (select), target times for swim/bike/run/T1/T2/overall (duration inputs `h:mm:ss`), notes.
+  - **Step 1 — Preference Profile:** max hours/week. **Availability grid (Mon–Sun)** where each day has a granularity control — **Unspecified · Day total · AM + PM** — revealing the relevant hour input(s) → `available_hours` jsonb (mixed granularity; omitted days = flexible). Long-**swim**/long-**bike**/long-**run** day pickers; rest day; free-text constraints.
+  - **Step 2 — Goal Manifest:** **target race** — search/select from the `races` catalog, *or* "not listed?" → free-text name + date + url; **goal type** (finish / target time / placement); target times for swim/T1/bike/T2/run/overall (`h:mm:ss`); notes. A **"Targets from history"** panel shows the selected race's **cutoffs** + the athlete's **`race_results`** history beside the target inputs to anchor realistic numbers.
 - "Finish" writes version 1 of each, lands on Review. Both steps skippable-later but encouraged.
 - States: empty (defaults), saving, error.
 
@@ -133,6 +135,19 @@ Reached from "Lock & Generate". Two clearly separated parts with copy buttons:
 ### 6.10 Settings
 - Connect/disconnect **Google Calendar**; default session time-of-day; display name, timezone; sign out. (Intervals API key is **not** handled here — that's SP1.)
 
+### 6.11 Races (browse & select)
+- A searchable, filterable list of the shared **`races`** catalog (read-only for athletes): name, date, location, `distance_type`, thumbnail. Filter by distance / date / location. A race detail view shows course (swim/bike/run terrain), conditions (temps, water temp), cutoffs, organizer/category, and a link out (`url`), with a **"Set as my goal race"** action that feeds the Goal form. Athletes cannot edit catalog races.
+- States: empty catalog ("no races yet — ask the organizer to add some"), loading, list, detail.
+
+### 6.12 Race results (my history)
+- The athlete's **`race_results`**: a list of past races with their finishing breakdown (swim/T1/bike/T2/run/overall). **Add result** — link a catalog race *or* free-text `race_name` + `race_url` + `result_date`; enter the segment finish times; `placement`/`category_place`; a **visibility toggle (private default / public)**; notes. Edit/delete own results. A small private/public indicator per row.
+- This history feeds the Goal form's "Targets from history" panel.
+- States: empty (add your first result), list, add/edit.
+
+### 6.13 Admin — manage races (only when `is_admin`)
+- Visible **only to admins** (`athletes.is_admin`). CRUD on the shared **`races`** catalog: add/edit a race with all fields — identity (name/description/images/url), course (swim_type, bike/run terrain), conditions (temps, water temp), where/when (location/city/country/date), classification (distance_type, organizer, race_type, category), and cutoffs. Hidden entirely for non-admin athletes (and the DB write policy enforces admin-only regardless of UI).
+- States: list, add/edit, save errors, permission-denied guard.
+
 ---
 
 ## 7. Visual design system — calm & minimal
@@ -186,6 +201,10 @@ Validation: must be valid JSON; `feedback` non-empty string; `sessions` a non-em
 7. The proposed plan is reviewable/editable; Approve sets `approved`; calendar push creates one event per session and records `google_event_id`, setting `synced`.
 8. History shows the feedback journal, past plans, and Profile/Goal version history.
 9. Visual result reads as calm & minimal, light-default, responsive.
+10. Availability supports mixed granularity (unspecified / day-total / AM-PM, mix-and-match across days); per-discipline long days + rest day save correctly.
+11. A goal can target a catalog race **or** a free-text race (name/date/url); `goal_type` is captured; the goal form surfaces the race's cutoffs + the athlete's `race_results` history.
+12. Athletes can browse/select the shared `races` catalog (read-only) and manage their own `race_results` with a working private/public visibility toggle (public results visible to other athletes; private ones not).
+13. The admin race-management screen appears only for `is_admin` athletes; a non-admin cannot write to `races` even if they bypass the UI (DB policy enforces it).
 
 ## 11. Notes for whoever builds this
 
