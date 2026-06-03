@@ -1,6 +1,8 @@
 # Triathlon OS — SP2 UI Build Plan (Slices 1–3)
 
 > Build of the SP2 Review UI per `2026-06-03-triathlon-os-sp2-review-ui-design.md` + `DESIGN.md`. **Execute continuously: gate only on `next build` + `tsc` success, then move to the next slice** (no per-slice human pause). Subagent-driven, Sonnet-heavy.
+>
+> **Current scope this round: Slices 1 & 2 ONLY.** Slice 3 (Weekly Review) is deferred — build it after 1 & 2 are done + reviewed.
 
 ## Setup facts
 - **App location:** `web/` subdir (root holds `supabase/`, `docs/`). Package manager: **pnpm**.
@@ -43,4 +45,4 @@
 
 ---
 
-**Out of scope (later):** Slice 4 (Generate → paste plan → review/approve), Slice 5 (Google Calendar, races admin screen, history). Backend automation SP1/SP3 remain separate.
+**Deferred (not this round):** **Slice 3 (Weekly Review + manual data entry)** — build after Slices 1 & 2. Then Slice 4 (Generate → paste plan → review/approve), Slice 5 (Google Calendar, races admin screen, history). Backend automation SP1/SP3 remain separate.
