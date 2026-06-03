@@ -16,7 +16,8 @@
 - **Spike outcome:** item 1 (MFP nutrition) concluded → D6 revision. Items 2 (Intervals API) & 3 (NotebookLM JSON) **deferred — risks knowingly accepted**, validated in SP1 / SP4.
 - **SP0 BUILT & VERIFIED** (branch `sp0-foundation`, subagent-driven, Sonnet): 9 migrations + 7 pgTAP files, **41/41 green** on the cloud dev project; `get_advisors` clean of all SP0 objects. A final code review drove extra hardening (composite FK for plan_session tenant integrity; revoked EXECUTE on test SECURITY DEFINER fns; prompt_templates natural key; RLS coverage test).
 - **Open items (non-blocking):** rotate DB password (leaked once in transcript); drop pre-existing `notes` table + `rls_auto_enable()` fn (not ours); enable leaked-password protection (dashboard); separate test-helper migrations from prod before a prod project exists.
-- **NEXT ACTION:** integrate `sp0-foundation` (merge/PR; repo is local-only — no git remote yet), then **SP1 (Data Engine)** — Intervals.icu nightly pull via Python/GitHub Actions, validating the deferred Intervals API field-mapping risk + Vault for the API key.
+- **SP0 merged to `main`.** **SP2 (Review UI) — design spec complete** (D17 reprioritized it ahead of SP1; D18 = build it externally in Figma Make). Spec: `docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`, committed on branch `sp2-review-ui`.
+- **NEXT ACTION:** user takes the SP2 spec to **Figma Make** to build the UI. Backend automation remains for later: **SP1** (Intervals nightly ingestion + Vault for the API key) and **SP3** (automated Drive bridge). No in-repo SP2 implementation.
 - **Not yet started:** any code, Supabase project, the feasibility spike itself.
 - **Key docs:** this file + `2026-06-03-triathlon-os-sp0-foundation-design.md` (same folder).
 
@@ -126,3 +127,15 @@ These are the user's *product-level* decisions that frame everything; the engine
 - **Decision:** use the Supabase MCP for **`get_advisors`** (security/perf lint in verification), **introspection** (`list_tables`/`list_migrations`/`list_extensions`), **type generation**, **`search_docs`**, and ad-hoc `execute_sql` checks. **Migrations stay repo SQL files** applied via `supabase db push --db-url "$SUPABASE_DB_URL"`; pgTAP runs via `psql`. **Do NOT use MCP `apply_migration` to iterate** (per the Supabase skill it writes a history entry per call and breaks `db diff`/`db pull`).
 - **Rationale:** the MCP adds a real automated security audit (`get_advisors`) and reduces reliance on psql/secret-in-shell, without displacing migrations-as-code (D12).
 - **RLS hardening folded into the SP0 plan (from the Supabase skill):** every policy uses `TO authenticated` + ownership predicate `(select auth.uid()) = athlete_id` (role-scoped + planner-cached); `handle_new_user` uses `set search_path = ''` + fully-qualified names (SECURITY DEFINER search-path safety); views already `security_invoker = true`. `user_metadata` is never used for authorization; secret/`service_role`-class keys never reach client code (app uses the publishable key — SP2).
+
+### D17 — Reprioritize SP2 (Review UI) before SP1 (Data Engine) · *Accepted 2026-06-03*
+- **Decision:** build the user-facing Review UI (SP2) next, before the nightly ingestion automation (SP1).
+- **Rationale:** the user wants to **onboard and start using** the app for real value now; automation is convenience that can wait. SP2 depends only on SP0 (done). Until SP1 exists, the week's data is **entered manually** in the UI (consistent with D6's manual nutrition).
+- **Effect on decomposition:** SP2 absorbed the *user-facing* parts of the loop — it now spans the whole UI (review + the NotebookLM hand-off screens + Google Calendar). The remaining backend automation stays as later sub-projects: **SP1** (Intervals nightly ingestion) and **SP3** (automated Drive bridge). New order: `SP0 → SP2 (UI) → SP1 / SP3 (backend automation)`.
+
+### D18 — SP2 specified for external build (Figma Make), not implemented in-repo · *Accepted 2026-06-03*
+- **Decision:** SP2 is delivered as a **self-contained design spec** (`docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`) for an **AI UI builder (Figma Make → React + Supabase)**. Brainstorming for SP2 **terminates at the spec** — no in-repo implementation, no `writing-plans` this round.
+- **Scope (full):** invite-only sign-in, onboarding, manual 4-pillar data entry (no SP1), weekly review + tags/notes, MyFitnessPal CSV nutrition import, Profile/Goal versioning + change-delta, Generate (4 copyable source docs + delta prompt — manual, since SP3 deferred), paste-plan + JSON validation, plan review/approve, Google Calendar sync, history, settings.
+- **Visual:** calm & minimal (Linear/Notion/Things), light default, responsive.
+- **NotebookLM hand-off:** source docs + delta prompt (faithful to D7; manual until SP3 automates it).
+- **Self-contained:** the spec includes the Supabase data contract + the plan-JSON schema so the external builder needs nothing else.

@@ -1,7 +1,7 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** SP0 (Foundation & Data Model) **DONE & MERGED to `main`** — 9 SQL migrations + 7 pgTAP test files (**41/41 green**) on the Supabase Cloud dev project; `get_advisors` clean of all SP0 objects. Now on branch **`sp1-data-engine`**. **Next: brainstorm → spec → plan → build SP1 (Data Engine)** — its own cycle. (`sp0-foundation` branch is redundant now, == main; safe to `git branch -d`.)
+**Phase:** SP0 **DONE & MERGED to `main`** (9 migrations + 7 pgTAP files, 41/41 green; advisor-clean). **SP2 (Review UI) — design spec COMPLETE** — reprioritized ahead of SP1 (D17) and specified for **external build in Figma Make** (D18). On branch **`sp2-review-ui`**. **Next: build SP2 in Figma Make from the spec; SP1/SP3 backend automation come later.** (`sp0-foundation` branch is redundant, == main; safe to `git branch -d`.)
 
 **Open items for the user (none block SP0):**
 - 🔑 **Rotate the DB password** (it appeared once in a transcript) → update `.env.local`.
@@ -26,7 +26,8 @@ Full vision + the 6 product decisions: SP0 spec §1.
 | **`HANDOFF.md`** (this) | Orientation, current status, read order, next action |
 | **`docs/superpowers/specs/2026-06-03-triathlon-os-decisions.md`** | Decision Log — every architecture decision (D1–D13) with rationale + alternatives rejected. The "why." |
 | **`docs/superpowers/specs/2026-06-03-triathlon-os-sp0-foundation-design.md`** | SP0 spec — full architecture context (stack, weekly loop, files-vs-prompt model) + the detailed, buildable Foundation/Data-Model design (schema, RLS, auth, migrations-as-code). |
-| **`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`** | SP0 **implementation plan** — 10 TDD tasks (migrations + pgTAP), ready for subagent-driven execution (D14). |
+| **`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`** | SP0 **implementation plan** — 10 TDD tasks (migrations + pgTAP), executed. |
+| **`docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`** | **SP2 Review UI spec** — the whole user-facing app, self-contained for an external builder (Figma Make → React + Supabase). |
 
 ## Architecture at a glance
 
@@ -39,19 +40,18 @@ Full vision + the 6 product decisions: SP0 spec §1.
 | # | Sub-project | Status |
 |---|-------------|--------|
 | **SP0** | Foundation & Data Model (schema, RLS, auth, migrations-as-code) | ✅ **Built & verified** (branch `sp0-foundation`, 41/41 pgTAP green) |
-| SP1 | Data Engine (Intervals.icu → normalise → Supabase, nightly) | Roadmap |
-| SP2 | Sunday Review UI (4-pillar dashboard, tags/notes, edit goal/pref, generate prompt) | Roadmap |
-| SP3 | Context Bridge (maintain 4 current files; render delta prompt; Google/Drive auth) | Roadmap |
-| SP4 | NotebookLM Loop + Plan Ingestion (prompt template; paste JSON → validate → store) | Roadmap |
-| SP5 | Plan Review + Google Calendar Sync (review/edit → Finalize → events) | Roadmap |
+| **SP2** | **Review UI — the whole user-facing app** (onboard, manual entry, 4-pillar review, tags/notes, MFP CSV, Profile/Goal versioning, Generate, paste-plan, review/approve, **Google Calendar**, history) | ✅ **Spec complete — external build (Figma Make)** |
+| SP1 | Data Engine (Intervals.icu → normalise → Supabase, nightly) — backend automation | Roadmap |
+| SP3 | Context Bridge (automate maintaining the 4 NotebookLM source files; Google/Drive) — backend automation | Roadmap |
+| ~~SP4 / SP5~~ | NotebookLM-loop UI + Calendar sync — **folded into SP2** | (in SP2 spec) |
 
-Order: `SP0 → {SP1, SP2} → SP3 → SP4 → SP5`. SP5 → next-week SP3 closes the feedback loop.
+Revised order (D17): `SP0 → SP2 (UI, incl. the SP4/SP5 user-facing loop) → SP1 / SP3 (backend automation)`. The NotebookLM hand-off in SP2 is manual (copy source docs + delta prompt) until SP3 automates it; data is entered manually until SP1 automates it.
 
-## ▶ Next action: integrate `sp0-foundation`, then SP1 (Data Engine)
+## ▶ Next action: build SP2 in Figma Make from the spec
 
-SP0 is built and green. Remaining:
-1. **Integrate the `sp0-foundation` branch** (merge to `main` or open a PR). Repo is local-only (no git remote yet) — add a GitHub remote to make the `db-ci.yml` workflow run.
-2. **SP1 — Data Engine** (next sub-project): Python + GitHub Actions nightly pull from Intervals.icu (training load, activities, physiological wellness — **not** nutrition; D6) → normalise → upsert into the SP0 schema. SP1 validates the Intervals API field mapping (the deferred D13 risk) and stores the Intervals key in Supabase Vault. Brainstorm SP1 → spec → plan → subagent build (its own cycle).
+SP0 is built, green, and merged to `main`. SP2's design spec is complete and self-contained.
+1. **Build SP2** in **Figma Make** (React + Supabase) from `docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`. Point it at the existing Supabase project; use the publishable key; RLS handles isolation.
+2. **Later (backend automation):** **SP1** — Python + GitHub Actions nightly Intervals.icu pull (training load, activities, physiological wellness — **not** nutrition; D6) → normalise → upsert; validates the deferred Intervals API field mapping (D13) and stores the Intervals key in Supabase Vault. **SP3** — automate the NotebookLM source-file maintenance (Drive). Each is its own brainstorm → spec → plan → build cycle.
 
 What's on the cloud dev DB now: 10 tables + 2 views, RLS on all, seed (2 athletes + global prompt template), 9 migrations applied. Generated types at `src/lib/database.types.ts`. Local loop: `set -a; source .env.local; set +a; export PATH="/opt/homebrew/opt/libpq/bin:$PATH"` then `supabase db push --db-url "$SUPABASE_DB_URL"` / `psql "$SUPABASE_DB_URL" -f supabase/tests/*.sql`.
 
