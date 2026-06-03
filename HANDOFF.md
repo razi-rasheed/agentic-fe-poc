@@ -49,7 +49,8 @@ Revised order (D17): `SP0 → SP2 (UI, incl. the SP4/SP5 user-facing loop) → S
 
 ## ▶ Next action: build SP2 in Figma Make from the spec
 
-SP0 is built, green, and merged to `main`. SP2's design spec is complete and self-contained.
+SP0 is built, green, and merged to `main`. SP2's design spec is complete **and its DB schema is already migrated onto the cloud dev project** — so Figma Make builds against a ready backend.
+- **Cloud DB now has** (beyond SP0): `athletes.is_admin`; `preference_profiles` mixed-granularity `available_hours` + `long_swim/bike/run_day`; `races` (shared catalog, admin-write); `goal_manifests.race_id`/`race_url`/`goal_type`; `race_results` (per-athlete, private/public). Seed includes 2 sample races, Alice as admin, a linked goal + a public result. **Full pgTAP suite 54/54 green; advisor clean of all our objects.** (Migrations on branch `sp2-review-ui`.)
 1. **Build SP2** in **Figma Make** (React + Supabase) from `docs/superpowers/specs/2026-06-03-triathlon-os-sp2-review-ui-design.md`. Point it at the existing Supabase project; use the publishable key; RLS handles isolation.
 2. **Later (backend automation):** **SP1** — Python + GitHub Actions nightly Intervals.icu pull (training load, activities, physiological wellness — **not** nutrition; D6) → normalise → upsert; validates the deferred Intervals API field mapping (D13) and stores the Intervals key in Supabase Vault. **SP3** — automate the NotebookLM source-file maintenance (Drive). Each is its own brainstorm → spec → plan → build cycle.
 
