@@ -1,0 +1,14 @@
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+export default function ContextPage() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Context</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground">Coming in the next slice.</p>
+      </CardContent>
+    </Card>
+  )
+}
