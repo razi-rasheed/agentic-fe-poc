@@ -1,8 +1,13 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** SP0 designed & approved; spike concluded (D13); **SP0 implementation plan written & revised for Supabase Cloud (D15).** **Next action = user completes cloud setup, then GIVES EXPLICIT CONFIRMATION before any implementation begins (subagent-driven, Sonnet-heavy, D14).**
-**Nothing is built yet** — no code, no Supabase project. **Do not start implementation without the user's go-ahead.**
+**Phase:** SP0 (Foundation & Data Model) **BUILT & VERIFIED** on branch `sp0-foundation` — 9 SQL migrations + 7 pgTAP test files (**41/41 green**) applied to the Supabase Cloud dev project; `get_advisors` clean of all SP0 objects. **Next: integrate the branch, then SP1 (Data Engine).**
+
+**Open items for the user (none block SP0):**
+- 🔑 **Rotate the DB password** (it appeared once in a transcript) → update `.env.local`.
+- 🧹 Pre-existing objects on the project that are NOT ours — review/drop: the `notes` starter table and the `rls_auto_enable()` function (advisor WARNs).
+- 🔒 Enable **leaked-password protection** (dashboard → Auth) — advisor WARN.
+- 🧪 Before a **prod** Supabase project exists, separate the test-helper migrations (`tests` schema) from the prod deploy (they're fine on dev / CI; the `tests` schema is not API-exposed).
 
 > This is the orientation doc. It deliberately stays shallow and points to the detailed docs. If you're resuming cold, read in this order: **this file → Decision Log → SP0 spec.**
 
@@ -33,7 +38,7 @@ Full vision + the 6 product decisions: SP0 spec §1.
 
 | # | Sub-project | Status |
 |---|-------------|--------|
-| **SP0** | Foundation & Data Model (schema, RLS, auth, migrations-as-code) | **Designed & approved** |
+| **SP0** | Foundation & Data Model (schema, RLS, auth, migrations-as-code) | ✅ **Built & verified** (branch `sp0-foundation`, 41/41 pgTAP green) |
 | SP1 | Data Engine (Intervals.icu → normalise → Supabase, nightly) | Roadmap |
 | SP2 | Sunday Review UI (4-pillar dashboard, tags/notes, edit goal/pref, generate prompt) | Roadmap |
 | SP3 | Context Bridge (maintain 4 current files; render delta prompt; Google/Drive auth) | Roadmap |
@@ -42,15 +47,13 @@ Full vision + the 6 product decisions: SP0 spec §1.
 
 Order: `SP0 → {SP1, SP2} → SP3 → SP4 → SP5`. SP5 → next-week SP3 closes the feedback loop.
 
-## ▶ Next action: write the SP0 implementation plan → subagent-driven build
+## ▶ Next action: integrate `sp0-foundation`, then SP1 (Data Engine)
 
-Feasibility spike (D13) is **concluded**:
-- ✅ **Nutrition (item 1):** no reliable MFP→Intervals sync → D6 revised to manual entry + optional MFP Premium CSV import (Intervals not used for nutrition).
-- ⏸️ **Intervals API (item 2)** and **NotebookLM JSON (item 3):** deferred — risks **knowingly accepted**, validated in SP1 / SP4. Fallbacks documented (D4 lenient parsing, D7 bulk-in-files).
+SP0 is built and green. Remaining:
+1. **Integrate the `sp0-foundation` branch** (merge to `main` or open a PR). Repo is local-only (no git remote yet) — add a GitHub remote to make the `db-ci.yml` workflow run.
+2. **SP1 — Data Engine** (next sub-project): Python + GitHub Actions nightly pull from Intervals.icu (training load, activities, physiological wellness — **not** nutrition; D6) → normalise → upsert into the SP0 schema. SP1 validates the Intervals API field mapping (the deferred D13 risk) and stores the Intervals key in Supabase Vault. Brainstorm SP1 → spec → plan → subagent build (its own cycle).
 
-Now:
-1. **Write the SP0 implementation plan** via the writing-plans skill (schema + RLS + auth + migrations-as-code, per the SP0 spec).
-2. **Execute via subagent-driven development (D14)** — **Sonnet 4.6 for the bulk of the work, Opus 4.8 reserved for the minimum.**
+What's on the cloud dev DB now: 10 tables + 2 views, RLS on all, seed (2 athletes + global prompt template), 9 migrations applied. Generated types at `src/lib/database.types.ts`. Local loop: `set -a; source .env.local; set +a; export PATH="/opt/homebrew/opt/libpq/bin:$PATH"` then `supabase db push --db-url "$SUPABASE_DB_URL"` / `psql "$SUPABASE_DB_URL" -f supabase/tests/*.sql`.
 
 ## Conventions
 

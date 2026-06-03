@@ -14,8 +14,9 @@
 - **SP0 (Foundation & Data Model): DESIGNED & APPROVED**, committed. Full schema + RLS + auth + migrations-as-code in the SP0 spec.
 - **Decisions D1–D5, D7–D14: ACCEPTED** (D6 revised: nutrition = manual + MFP CSV import; D13 spike concluded; D14 subagent-driven Sonnet-heavy). **D15: Supabase Cloud, no local Docker. D16: adopt Supabase MCP + RLS hardening** (see below). **SP0 implementation plan written** (`docs/superpowers/plans/2026-06-03-triathlon-os-sp0-foundation.md`).
 - **Spike outcome:** item 1 (MFP nutrition) concluded → D6 revision. Items 2 (Intervals API) & 3 (NotebookLM JSON) **deferred — risks knowingly accepted**, validated in SP1 / SP4.
-- **Cloud setup status:** Supabase CLI 2.104 installed; psql on PATH; `.env.local` set; `select 1` against the cloud DB succeeds; Supabase MCP connected. ⚠️ DB password appeared in transcript once — rotate when convenient.
-- **NEXT ACTION:** awaiting user **"go"** to execute the SP0 plan via **subagent-driven development** (D14, Sonnet-heavy).
+- **SP0 BUILT & VERIFIED** (branch `sp0-foundation`, subagent-driven, Sonnet): 9 migrations + 7 pgTAP files, **41/41 green** on the cloud dev project; `get_advisors` clean of all SP0 objects. A final code review drove extra hardening (composite FK for plan_session tenant integrity; revoked EXECUTE on test SECURITY DEFINER fns; prompt_templates natural key; RLS coverage test).
+- **Open items (non-blocking):** rotate DB password (leaked once in transcript); drop pre-existing `notes` table + `rls_auto_enable()` fn (not ours); enable leaked-password protection (dashboard); separate test-helper migrations from prod before a prod project exists.
+- **NEXT ACTION:** integrate `sp0-foundation` (merge/PR; repo is local-only — no git remote yet), then **SP1 (Data Engine)** — Intervals.icu nightly pull via Python/GitHub Actions, validating the deferred Intervals API field-mapping risk + Vault for the API key.
 - **Not yet started:** any code, Supabase project, the feasibility spike itself.
 - **Key docs:** this file + `2026-06-03-triathlon-os-sp0-foundation-design.md` (same folder).
 
