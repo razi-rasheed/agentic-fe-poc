@@ -1,10 +1,10 @@
 # Triathlon OS — SP2: Review UI Design Spec
 
 **Date:** 2026-06-03
-**Status:** Approved design. **Deliverable spec — intended to be built elsewhere (Figma Make).** Not implemented in this repo.
-**Build target:** an AI UI builder (Figma Make) generating a **React** web app backed by **Supabase** (auth + Postgres + RLS). The spec is self-contained: it includes the data contract, so it does not require the rest of this repo to build.
+**Status:** Approved design. **Built as a hand/AI-coded Next.js app** (e.g. with Claude Code / Cursor) against the existing Supabase project. The DB schema this spec needs is already migrated onto the cloud dev project.
+**Build target:** a **Next.js + TypeScript** app using **shadcn/ui** for the UI and **Supabase** (`supabase-js`) for auth + data (RLS = tenant isolation). **The visual design system lives in `DESIGN.md`** (shadcn preset **`b5pZXjoX4i`**; light/dark via `next-themes`). The spec is self-contained: it includes the data contract.
 
-> **How to use this doc:** it is both a design spec and a build brief. Sections 1–4 give context; §5 is the Supabase data contract; §6–§8 are the screens, visual system, and behaviors a builder needs; §9 is the NotebookLM contract; §10 is acceptance criteria. A builder can paste the relevant sections into Figma Make.
+> **How to use this doc:** it is both a design spec and a build brief. §1–§4 = context; §5 = the Supabase data contract; §6 = screens; §7 = visual system (→ defers to `DESIGN.md`); §8 = behaviors; §9 = NotebookLM contract; §10 = acceptance. Build screen-by-screen with shadcn components themed by the preset.
 
 ---
 
@@ -150,15 +150,16 @@ Reached from "Lock & Generate". Two clearly separated parts with copy buttons:
 
 ---
 
-## 7. Visual design system — calm & minimal
+## 7. Visual design system
 
-- **Vibe:** restrained, premium, typography-forward (Linear / Notion / Things). Generous whitespace; content in soft cards on a near-white background. Low cognitive load — this is a once-a-week reflective review, not a hype dashboard.
-- **Color:** neutral greys for structure; a single calm accent (e.g. a muted teal/indigo) for primary actions and key data; reserve semantic colors (success/warn/error) for states. Optionally a subtle per-sport hue for swim/bike/run chips. **Light mode default**, dark mode supported.
-- **Type:** one clean sans (e.g. Inter); clear hierarchy; tabular figures for metrics.
-- **Data viz:** gentle and minimal — sparklines / small area charts for load (CTL/ATL/TSB) and trends; avoid heavy chart chrome. Numbers first, charts as quiet support.
-- **Components:** soft rounded cards, subtle borders/shadows, calm chips for tags, inline-editable fields, side panels for entry, a clear primary button per screen, unobtrusive toasts.
-- **Layout:** desktop-first (the Sunday review happens at a desk) but fully responsive; the day rail collapses gracefully on mobile.
-- **Tone of copy:** warm, concise, coach-like. Empty states encourage ("Add your first session" / "Import your week from MyFitnessPal").
+**The design system is defined in `DESIGN.md` — that file is authoritative.** In short: **shadcn/ui** (Radix + Tailwind) on **Next.js**, themed by the shadcn preset **`b5pZXjoX4i`** (colors/fonts/radius/icons), with **light/dark via `next-themes`**. Build with shadcn components and the preset's semantic tokens (`bg-background`, `text-foreground`, `bg-primary`, …) — never hardcode colors.
+
+Composition guidance for this app (layout/UX on top of the preset):
+- **Calm and uncluttered** — generous spacing, clear hierarchy, numbers-first; a once-a-week reflective review, not a hype dashboard.
+- **Data viz:** shadcn `Chart` (Recharts) for the fitness/fatigue/form (CTL/ATL/TSB) trend + per-pillar sparklines; quiet, numbers-first.
+- **Layout:** desktop-first (the Sunday review happens at a desk), fully responsive; the day rail collapses gracefully on mobile.
+- **Components:** shadcn `Card`, `Form` (rhf+zod), `Dialog`/`Sheet` for entry, `Badge` for tags, `Sonner` toasts, `Skeleton` loading.
+- **Tone of copy:** warm, concise, coach-like; encouraging empty states ("Add your first session" / "Import your week from MyFitnessPal").
 
 ## 8. Cross-cutting behaviors
 
@@ -208,6 +209,6 @@ Validation: must be valid JSON; `feedback` non-empty string; `sessions` a non-em
 
 ## 11. Notes for whoever builds this
 
-- Built in **Figma Make** (or similar) as a **React + Supabase** app. Point it at the existing Supabase project; use the publishable key; rely on RLS for isolation.
-- This spec deliberately includes the **data contract** (§5) and the **NotebookLM JSON** (§9) so it's self-contained.
+- Built as a **hand/AI-coded Next.js + TypeScript app** using **shadcn/ui** (scaffold with `npx shadcn@latest init --preset b5pZXjoX4i --base base --template next`; see `DESIGN.md`) and **`supabase-js`** against the existing Supabase project (publishable key; RLS = isolation). The DB schema is already migrated on the cloud dev project.
+- This spec deliberately includes the **data contract** (§5) and the **NotebookLM JSON** (§9) so it's self-contained; the **visual system** is in `DESIGN.md`.
 - When **SP1** lands, manual data entry becomes a fallback (data auto-arrives); when **SP3** lands, the Generate screen's manual "copy these source docs" step is replaced by automated Drive sync. Design the Generate and entry screens so those can be swapped without reworking the rest.
