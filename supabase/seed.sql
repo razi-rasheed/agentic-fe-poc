@@ -33,6 +33,27 @@ values
    interval '2 hours 20 minutes', interval '10 hours 30 minutes', interval '6 hours', interval '15 hours')
 on conflict (id) do nothing;
 
+-- Real catalogued race (added via MCP to the cloud dev DB; same id here for fresh-rebuild idempotency).
+insert into public.races
+  (id, name, description, url, image_url, thumbnail_url,
+   location, city, country, date,
+   distance_type, race_organizer, race_type, race_category,
+   swim_type, bike_terrain, run_terrain,
+   temp_high_c, temp_low_c, water_temp_c,
+   cutoff_swim, cutoff_bike, cutoff_run, cutoff_overall)
+values
+  ('9a4eac49-d14c-42b7-bd4e-7351a7cf9754', 'IRONMAN 70.3 Erkner',
+   'IRONMAN 70.3 near Berlin: a lake swim in the Dämeritzsee, a flat, fast 90 km bike along the Spree, and a 3-loop half-marathon through Erkner.',
+   'https://www.ironman.com/races/im703-erkner',
+   'https://ukjsbxoizktwxkfihpjb.supabase.co/storage/v1/object/public/races_assets/erkner_cycling_forrest.avif',
+   'https://ukjsbxoizktwxkfihpjb.supabase.co/storage/v1/object/public/races_assets/berlin-aerial-view.avif',
+   'Erkner (Berlin–Brandenburg)', 'Berlin', 'Germany', date '2026-09-13',
+   '70.3', 'IRONMAN', 'individual', 'age-group',
+   'lake', 'flat', 'flat',
+   20, 10, 19,
+   interval '1 hour 10 minutes', interval '5 hours 30 minutes', interval '8 hours 30 minutes', interval '8 hours 30 minutes')
+on conflict (id) do nothing;
+
 -- Alice v1 Preference Profile (mixed-granularity availability; refresh on re-seed).
 insert into public.preference_profiles
   (athlete_id, version, max_hours_per_week, available_hours, long_swim_day, long_bike_day, long_run_day, rest_day)
