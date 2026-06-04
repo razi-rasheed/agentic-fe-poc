@@ -1,7 +1,7 @@
 # Triathlon OS — Handoff / Start Here
 
 **Last updated:** 2026-06-03
-**Phase:** SP0 **DONE & MERGED to `main`**. **SP2 (Review UI): design spec + `DESIGN.md` complete, and its DB schema migrated to the cloud dev project** (full pgTAP **54/54 green**, advisor-clean). Reprioritized ahead of SP1 (D17); built as a **hand/AI-coded Next.js + shadcn app** (D18, design system = shadcn preset `b5pZXjoX4i`). On branch **`sp2-review-ui`**. **Next: build the SP2 Next.js + shadcn UI from the spec against the ready schema; SP1/SP3 backend automation later.** (`sp0-foundation` branch is redundant, == main; safe to `git branch -d`.)
+**Phase:** SP0 **DONE & MERGED to `main`**. **SP2 (Review UI): design spec + `DESIGN.md` complete, and its DB schema migrated to the cloud dev project** (full pgTAP **54/54 green**, advisor-clean). Reprioritized ahead of SP1 (D17); built as a **hand/AI-coded Next.js + shadcn app** (D18, design system = shadcn preset `b5pZXjoX4i`). On branch **`sp2-review-ui`**. **SP2 UI build in progress (Next.js app in `web/`): Slices 1 (foundation + email/password auth + app shell + theming) and 2 (onboarding wizard + context: preference & goal) DONE — `pnpm -C web build` green.** **Next: Slice 3 (Weekly Review + manual data entry)** [was deferred this round], then Slice 4 (coaching loop), Slice 5 (calendar/admin/history). (`sp0-foundation` branch is redundant, == main; safe to `git branch -d`.)
 
 **Open items for the user (none block SP0):**
 - 🔑 **Rotate the DB password** (it appeared once in a transcript) → update `.env.local`.
@@ -48,12 +48,14 @@ Full vision + the 6 product decisions: SP0 spec §1.
 
 Revised order (D17): `SP0 → SP2 (UI, incl. the SP4/SP5 user-facing loop) → SP1 / SP3 (backend automation)`. The NotebookLM hand-off in SP2 is manual (copy source docs + delta prompt) until SP3 automates it; data is entered manually until SP1 automates it.
 
-## ▶ Next action: build the SP2 Next.js + shadcn UI from the spec
+## ▶ Next action: SP2 UI — Slice 3 (Weekly Review), then 4 & 5
 
-SP0 is built, green, and merged to `main`. SP2's design spec + `DESIGN.md` are complete **and its DB schema is already migrated onto the cloud dev project** — so the UI builds against a ready backend.
-- **Cloud DB now has** (beyond SP0): `athletes.is_admin`; `preference_profiles` mixed-granularity `available_hours` + `long_swim/bike/run_day`; `races` (shared catalog, admin-write); `goal_manifests.race_id`/`race_url`/`goal_type`; `race_results` (per-athlete, private/public). Seed includes 2 sample races, Alice as admin, a linked goal + a public result. **Full pgTAP suite 54/54 green; advisor clean of all our objects.** (Migrations on branch `sp2-review-ui`.)
-1. **Build SP2** as a **Next.js + shadcn/ui** app: `npx shadcn@latest init --preset b5pZXjoX4i --base base --template next` (see `DESIGN.md`), then implement screens from `2026-06-03-triathlon-os-sp2-review-ui-design.md` using `supabase-js` (publishable key; RLS handles isolation).
-2. **Later (backend automation):** **SP1** — Python + GitHub Actions nightly Intervals.icu pull (training load, activities, physiological wellness — **not** nutrition; D6) → normalise → upsert; validates the deferred Intervals API field mapping (D13) and stores the Intervals key in Supabase Vault. **SP3** — automate the NotebookLM source-file maintenance (Drive). Each is its own brainstorm → spec → plan → build cycle.
+The Next.js app lives in **`web/`** (App Router, **no `src/`** — code at `web/app|components|lib|hooks`; pnpm; shadcn preset `b5pZXjoX4i`; `@supabase/ssr`). **Slices 1 & 2 are built and build-green.**
+- **Run it:** `pnpm -C web dev` → http://localhost:3000. Log in with `razi.abdulrasheed@hotmail.com` (admin) or `razi.mathilakath@gmail.com` (set their passwords in the Supabase dashboard). A fresh account → `/onboarding` (set Preference + Goal; the race combobox shows the 2 seed races) → `/review` placeholder; edit later via `/context`.
+- **Env:** `web/.env.local` (gitignored) holds `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (publishable = public). Build plan: `docs/superpowers/plans/2026-06-04-triathlon-os-sp2-slices-1-3.md`.
+1. **Slice 3 — Weekly Review + manual data entry** (`/review`): 4-pillar day rail, inline `daily_metrics` entry, activities + tags/notes, MFP CSV import, Lock & Generate. (Deferred from this round.)
+2. Then **Slice 4** (Generate → paste plan → review/approve) and **Slice 5** (Google Calendar, races catalog browse + admin, race-results, history).
+3. **Backend automation (separate cycles):** **SP1** — Python + GitHub Actions nightly Intervals.icu pull → normalise → upsert (validates the deferred Intervals API mapping D13; Intervals key in Vault). **SP3** — automate NotebookLM source-file maintenance (Drive).
 
 What's on the cloud dev DB now: 10 tables + 2 views, RLS on all, seed (2 athletes + global prompt template), 9 migrations applied. Generated types at `src/lib/database.types.ts`. Local loop: `set -a; source .env.local; set +a; export PATH="/opt/homebrew/opt/libpq/bin:$PATH"` then `supabase db push --db-url "$SUPABASE_DB_URL"` / `psql "$SUPABASE_DB_URL" -f supabase/tests/*.sql`.
 
